@@ -64,18 +64,20 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, marginBottom: 4 }}>Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)' }}>{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
+      <div className="page-header" style={{ paddingLeft: '48px' }}>
+        <div>
+          <h1 className="text-3xl mb-4">Dashboard</h1>
+          <p className="text-muted">{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
+        </div>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 28 }}>
+      {/* Stat cards - 2 columns on mobile, more on desktop */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-16 mb-28">
         <StatCard label="Available Items" value={stats.availableItems} icon={<Package size={18} />} color="var(--gold)" />
-        <StatCard label="Stock Cost Value" value={fmt(stats.stockValue)} icon={<DollarSign size={18} />} color="var(--gold)" small />
+        <StatCard label="Stock Cost" value={fmt(stats.stockValue)} icon={<DollarSign size={18} />} color="var(--gold)" small />
         <StatCard label="Potential Revenue" value={fmt(stats.potentialRevenue)} icon={<TrendingUp size={18} />} color="var(--success)" small />
         <StatCard label="Active Buybacks" value={stats.activeBuybacks} icon={<Handshake size={18} />} color="var(--info)" />
-        <StatCard label="Buyback Value Due" value={fmt(stats.totalBuybackValue)} icon={<DollarSign size={18} />} color="var(--info)" small />
+        <StatCard label="Buyback Value" value={fmt(stats.totalBuybackValue)} icon={<DollarSign size={18} />} color="var(--info)" small />
         <StatCard label="Customers" value={stats.totalCustomers} icon={<Users size={18} />} color="var(--text-muted)" />
       </div>
 
@@ -139,12 +141,12 @@ export default function Dashboard() {
 
 function StatCard({ label, value, icon, color, small }: any) {
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
         <span style={{ color }}>{icon}</span>
       </div>
-      <div style={{ fontSize: small ? 18 : 28, fontWeight: 700, fontFamily: small ? 'var(--font-body)' : 'var(--font-display)', color: 'var(--text)' }}>
+      <div style={{ fontSize: small ? 14 : 20, fontWeight: 700, fontFamily: small ? 'var(--font-body)' : 'var(--font-display)', color: 'var(--text)' }}>
         {value}
       </div>
     </div>

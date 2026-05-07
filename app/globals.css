@@ -266,6 +266,11 @@ tr:hover td { background: var(--bg-elevated); }
   .md\:grid-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
   .md\:grid-cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 }
+@media (min-width: 1024px) {
+  .lg\:grid-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .lg\:grid-cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .lg\:grid-cols-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+}
 
 /* Visibility */
 .hidden { display: none; }
