@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabase, Loan as Buyback, Customer, InventoryItem } from '@/lib/supabase';
+import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
 import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2 } from 'lucide-react';
 import { format, isPast, isToday, differenceInDays } from 'date-fns';
 

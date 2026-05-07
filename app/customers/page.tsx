@@ -30,15 +30,15 @@ export default function CustomersPage() {
 
   async function loadStats(customer: Customer) {
     setSelected(customer);
-    const [inv, loans] = await Promise.all([
+    const [inv, buybacks] = await Promise.all([
       supabase.from('inventory').select('*').eq('customer_id', customer.id),
       supabase.from('loans').select('*').eq('customer_id', customer.id),
     ]);
     setCustomerStats({
       items: (inv.data || []).length,
-      activeLoans: (loans.data || []).filter(l => l.status === 'Active').length,
-      totalLoans: (loans.data || []).length,
-      loans: loans.data || [],
+      activeBuybacks: (buybacks.data || []).filter(l => l.status === 'Active').length,
+      totalBuybacks: (buybacks.data || []).length,
+      buybacks: buybacks.data || [],
     });
   }
 
@@ -165,8 +165,8 @@ export default function CustomersPage() {
                   <div className="text-xs text-muted">Items</div>
                 </div>
                 <div className="stats-card">
-                  <div className="text-xl font-bold" style={{ color: customerStats.activeLoans ? 'var(--warning)' : 'var(--text)' }}>{customerStats.activeLoans || 0}</div>
-                  <div className="text-xs text-muted">Active Loans</div>
+                  <div className="text-xl font-bold" style={{ color: customerStats.activeBuybacks ? 'var(--warning)' : 'var(--text)' }}>{customerStats.activeBuybacks || 0}</div>
+                  <div className="text-xs text-muted">Active Buybacks</div>
                 </div>
               </div>
               {selected.notes && (

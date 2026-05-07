@@ -33,7 +33,7 @@ create table inventory (
   condition text default 'Good', -- Good, Fair, Poor
   cost_price numeric(10,2) not null,
   selling_price numeric(10,2) not null,
-  status text default 'Available', -- Available, Sold, On Loan
+  status text default 'Available', -- Available, Sold, Buyback
   customer_id uuid references customers(id) on delete set null,
   date_acquired date default current_date,
   date_sold date,

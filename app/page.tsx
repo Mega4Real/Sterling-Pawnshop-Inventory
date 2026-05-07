@@ -25,12 +25,12 @@ export default function Dashboard() {
       ]);
 
       const items = inv.data || [];
-      const loanList = loans.data || [];
+      const buybackList = loans.data || [];
       const now = new Date();
       const soon = addDays(now, 3);
 
-      const overdue = loanList.filter(l => isPast(new Date(l.due_date)) && !isToday(new Date(l.due_date)));
-      const nearDue = loanList.filter(l => {
+      const overdue = buybackList.filter(l => isPast(new Date(l.due_date)) && !isToday(new Date(l.due_date)));
+      const nearDue = buybackList.filter(l => {
         const d = new Date(l.due_date);
         return !isPast(d) && d <= soon;
       });
@@ -39,13 +39,13 @@ export default function Dashboard() {
         totalItems: items.length,
         availableItems: items.filter(i => i.status === 'Available').length,
         soldItems: items.filter(i => i.status === 'Sold').length,
-        activeBuybacks: loanList.length,
+        activeBuybacks: buybackList.length,
         overdueBuybacks: overdue.length,
         dueSoonBuybacks: nearDue.length,
         totalCustomers: (customers.data || []).length,
         stockValue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.cost_price, 0),
         potentialRevenue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.selling_price, 0),
-        totalBuybackValue: loanList.reduce((s, l) => s + l.total_due, 0),
+        totalBuybackValue: buybackList.reduce((s, l) => s + l.total_due, 0),
       });
       setOverdueList(overdue);
       setDueSoon(nearDue);
