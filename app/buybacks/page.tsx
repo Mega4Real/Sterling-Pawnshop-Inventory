@@ -4,7 +4,7 @@ import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
 import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2 } from 'lucide-react';
 import { format, isPast, isToday, differenceInDays } from 'date-fns';
 
-const PERIODS = ['Daily', 'Weekly', 'Monthly'];
+const PERIODS = ['2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 const STATUSES = ['Active', 'Redeemed', 'Forfeited', 'Extended'];
 
 export default function BuybacksPage() {
@@ -22,8 +22,9 @@ export default function BuybacksPage() {
   function defaultForm() {
     return {
       customer_id: '', inventory_id: '', loan_amount: '',
-      interest_rate: '10', interest_period: 'Monthly',
+      interest_rate: '10', interest_period: '1 Month',
       due_date: '', notes: '', status: 'Active',
+      total_due: '',
       isNewCustomer: false, newCustomerName: '', newCustomerPhone: ''
     };
   }
@@ -58,6 +59,7 @@ export default function BuybacksPage() {
       due_date: buyback.due_date,
       notes: buyback.notes || '',
       status: buyback.status,
+      total_due: String(buyback.total_due),
       isNewCustomer: false,
       newCustomerName: '',
       newCustomerPhone: ''
@@ -66,9 +68,7 @@ export default function BuybacksPage() {
     setShowModal(true);
   }
 
-  function calcTotal(amount: number, rate: number) {
-    return amount + (amount * rate / 100);
-  }
+
 
   async function save() {
     try {
@@ -92,18 +92,16 @@ export default function BuybacksPage() {
         finalCustomerId = newCust.id;
       }
 
-      const amount = parseFloat(form.loan_amount);
-      const rate = parseFloat(form.interest_rate);
-      const total = calcTotal(amount, rate);
+
 
       const payload = {
         customer_id: finalCustomerId,
         inventory_id: form.inventory_id || null,
-        loan_amount: amount,
-        interest_rate: rate,
+        loan_amount: parseFloat(form.loan_amount),
+        interest_rate: parseFloat(form.interest_rate),
         interest_period: form.interest_period,
         due_date: form.due_date,
-        total_due: total,
+        total_due: parseFloat(form.total_due),
         status: form.status,
         notes: form.notes,
       };
@@ -337,7 +335,8 @@ export default function BuybacksPage() {
                       ...form, 
                       inventory_id: itemId,
                       loan_amount: String(amount),
-                      interest_rate: String(rate.toFixed(1))
+                      interest_rate: String(rate.toFixed(1)),
+                      total_due: String(total.toFixed(2))
                     });
                   } else {
                     setForm({ ...form, inventory_id: itemId });
@@ -349,11 +348,21 @@ export default function BuybacksPage() {
               </div>
               <div>
                 <label className="label">Buyback Amount (GH₵) *</label>
-                <input className="input" type="number" min="0" step="0.01" value={form.loan_amount} onChange={e => setForm({ ...form, loan_amount: e.target.value })} placeholder="0.00" />
+                <input className="input" type="number" min="0" step="0.01" value={form.loan_amount} onChange={e => {
+                  const amount = e.target.value;
+                  const rate = form.interest_rate;
+                  const total = parseFloat(amount) + (parseFloat(amount) * parseFloat(rate) / 100);
+                  setForm({ ...form, loan_amount: amount, total_due: total.toFixed(2) });
+                }} placeholder="0.00" />
               </div>
               <div>
                 <label className="label">Interest Rate (%)</label>
-                <input className="input" type="number" min="0" step="0.5" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} title="Interest Rate" />
+                <input className="input" type="number" min="0" step="0.5" value={form.interest_rate} onChange={e => {
+                  const rate = e.target.value;
+                  const amount = form.loan_amount;
+                  const total = parseFloat(amount) + (parseFloat(amount) * parseFloat(rate) / 100);
+                  setForm({ ...form, interest_rate: rate, total_due: total.toFixed(2) });
+                }} title="Interest Rate" />
               </div>
               <div>
                 <label className="label">Interest Period</label>
@@ -369,14 +378,28 @@ export default function BuybacksPage() {
                 <label className="label">Notes</label>
                 <input className="input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
               </div>
-              {form.loan_amount && form.interest_rate && (
-                <div className="full p-10 border-gold" style={{ background: 'rgba(212,168,83,0.08)', border: '1px solid var(--gold-dim)', borderRadius: 8 }}>
-                  <div className="text-sm text-muted mb-4">Total Due</div>
-                  <div className="text-2xl text-gold" style={{ fontFamily: 'var(--font-display)' }}>
-                    GH₵ {(parseFloat(form.loan_amount) + parseFloat(form.loan_amount) * parseFloat(form.interest_rate) / 100).toFixed(2)}
+              
+              <div className="full p-10 border-gold" style={{ background: 'rgba(212,168,83,0.05)', border: '1px solid var(--gold-dim)', borderRadius: 8 }}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <label className="label mb-0 text-xs uppercase tracking-wider opacity-70">Total Due (Redemption)</label>
+                    <div className="flex items-center gap-4">
+                      <span className="text-gold font-bold">GH₵</span>
+                      <input 
+                        className="text-xl text-gold bg-transparent border-none p-0 focus:outline-none font-bold w-full" 
+                        type="number"
+                        value={form.total_due}
+                        onChange={e => {
+                          const total = e.target.value;
+                          const amount = form.loan_amount;
+                          const rate = parseFloat(amount) > 0 ? ((parseFloat(total) - parseFloat(amount)) / parseFloat(amount)) * 100 : 0;
+                          setForm({ ...form, total_due: total, interest_rate: rate.toFixed(1) });
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>

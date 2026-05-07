@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase, InventoryItem, Customer } from '@/lib/supabase';
-import { Plus, Search, X, Edit2, CheckCircle, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText } from 'lucide-react';
+import { format, addMonths } from 'date-fns';
 
 const CATEGORIES = ['Electronics', 'Jewelry', 'Clothing', 'Tools', 'Musical Instruments', 'Watches', 'Bags', 'Other'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 const STATUSES = ['Available', 'Sold', 'Buyback'];
+const PERIODS = ['2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -24,7 +25,10 @@ export default function InventoryPage() {
       item_name: '', description: '', category: 'Electronics', condition: 'Good',
       cost_price: '', selling_price: '', status: 'Available',
       customer_id: '', date_acquired: format(new Date(), 'yyyy-MM-dd'),
-      serial_number: '', notes: ''
+      serial_number: '', notes: '',
+      isNewCustomer: false, newCustomerName: '', newCustomerPhone: '',
+      due_date: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
+      interest_rate: '10', interest_period: '1 Month'
     };
   }
 
@@ -44,7 +48,10 @@ export default function InventoryPage() {
       item_name: item.item_name, description: item.description || '', category: item.category || 'Electronics',
       condition: item.condition || 'Good', cost_price: String(item.cost_price), selling_price: String(item.selling_price),
       status: item.status, customer_id: item.customer_id || '', date_acquired: item.date_acquired || '',
-      serial_number: item.serial_number || '', notes: item.notes || ''
+      serial_number: item.serial_number || '', notes: item.notes || '',
+      isNewCustomer: false, newCustomerName: '', newCustomerPhone: '',
+      due_date: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
+      interest_rate: '10', interest_period: '1 Month'
     });
     setEditing(item);
     setShowModal(true);
@@ -69,25 +76,81 @@ export default function InventoryPage() {
 
   async function save() {
     try {
+      let finalCustomerId = form.customer_id;
+
+      // Handle New Customer
+      if (form.status === 'Buyback' && form.isNewCustomer) {
+        if (!form.newCustomerName) {
+          alert('Please enter customer name');
+          return;
+        }
+        const { data: nc, error: ce } = await supabase.from('customers').insert({
+          full_name: form.newCustomerName,
+          phone: form.newCustomerPhone
+        }).select().single();
+        
+        if (ce) {
+          alert(`Error creating customer: ${ce.message}`);
+          return;
+        }
+        finalCustomerId = nc.id;
+      }
+
       const payload = {
-        ...form,
+        item_name: form.item_name,
+        description: form.description,
+        category: form.category,
+        condition: form.condition,
         cost_price: parseFloat(form.cost_price as string),
         selling_price: parseFloat(form.selling_price as string),
-        customer_id: form.customer_id || null,
+        status: form.status,
+        customer_id: finalCustomerId || null,
+        date_acquired: form.date_acquired,
+        serial_number: form.serial_number,
+        notes: form.notes,
         date_sold: form.status === 'Sold' ? format(new Date(), 'yyyy-MM-dd') : null,
       };
       
+      let invData;
       let error;
       if (editing) {
-        ({ error } = await supabase.from('inventory').update(payload).eq('id', editing.id));
+        ({ data: invData, error } = await supabase.from('inventory').update(payload).eq('id', editing.id).select().single());
       } else {
-        ({ error } = await supabase.from('inventory').insert(payload));
+        ({ data: invData, error } = await supabase.from('inventory').insert(payload).select().single());
       }
 
       if (error) {
         console.error('Supabase Error:', error);
         alert(`Error saving item: ${error.message}`);
         return;
+      }
+
+      // Handle Buyback (Loan) Record
+      if (form.status === 'Buyback' && invData) {
+        const loanPayload = {
+          customer_id: finalCustomerId,
+          inventory_id: invData.id,
+          loan_amount: parseFloat(form.cost_price as string),
+          interest_rate: parseFloat(form.interest_rate),
+          interest_period: form.interest_period,
+          due_date: form.due_date,
+          total_due: parseFloat(form.selling_price as string),
+          status: 'Active',
+          notes: form.notes
+        };
+
+        // Check if a loan already exists for this item (if editing)
+        if (editing) {
+          const { data: existingLoan } = await supabase.from('loans').select('id').eq('inventory_id', editing.id).single();
+          if (existingLoan) {
+            await supabase.from('loans').update(loanPayload).eq('id', existingLoan.id);
+          } else {
+            await supabase.from('loans').insert(loanPayload);
+          }
+        } else {
+          const { error: le } = await supabase.from('loans').insert(loanPayload);
+          if (le) console.error('Error creating buyback record:', le);
+        }
       }
 
       setShowModal(false);
@@ -208,11 +271,21 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label className="label">Cost Price (GH₵) *</label>
-                <input className="input" type="number" min="0" step="0.01" value={form.cost_price} onChange={e => setForm({ ...form, cost_price: e.target.value })} placeholder="0.00" />
+                <input className="input" type="number" min="0" step="0.01" value={form.cost_price} onChange={e => {
+                  const val = e.target.value;
+                  const sell = form.selling_price || '0';
+                  const rate = val && parseFloat(val) > 0 ? ((parseFloat(sell) - parseFloat(val)) / parseFloat(val)) * 100 : 0;
+                  setForm({ ...form, cost_price: val, interest_rate: rate.toFixed(1) });
+                }} placeholder="0.00" />
               </div>
               <div>
-                <label className="label">Selling Price (GH₵) *</label>
-                <input className="input" type="number" min="0" step="0.01" value={form.selling_price} onChange={e => setForm({ ...form, selling_price: e.target.value })} placeholder="0.00" />
+                <label className="label">{form.status === 'Buyback' ? 'Buyback Due (Redemption) *' : 'Selling Price (GH₵) *'}</label>
+                <input className="input" type="number" min="0" step="0.01" value={form.selling_price} onChange={e => {
+                  const val = e.target.value;
+                  const cost = form.cost_price || '0';
+                  const rate = cost && parseFloat(cost) > 0 ? ((parseFloat(val) - parseFloat(cost)) / parseFloat(cost)) * 100 : 0;
+                  setForm({ ...form, selling_price: val, interest_rate: rate.toFixed(1) });
+                }} placeholder="0.00" />
               </div>
               <div>
                 <label className="label">Status</label>
@@ -224,17 +297,72 @@ export default function InventoryPage() {
                 <label className="label">Date Acquired</label>
                 <input className="input" type="date" value={form.date_acquired} onChange={e => setForm({ ...form, date_acquired: e.target.value })} title="Date Acquired" />
               </div>
-              <div>
+
+              {form.status === 'Buyback' && (
+                <div className="full bg-gold-faint p-20 rounded-xl border-gold-dim mt-10 mb-10">
+                  <div className="flex items-center gap-10 mb-16 text-gold">
+                    <FileText size={20} />
+                    <h3 className="text-lg font-bold">Buyback Agreement</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-20">
+                    <div className="col-span-2">
+                      <div className="flex justify-between items-center mb-8">
+                        <label className="label mb-0">Customer Details *</label>
+                        <button 
+                          className="btn-ghost text-xs p-4 text-gold flex items-center gap-4"
+                          onClick={() => setForm({ ...form, isNewCustomer: !form.isNewCustomer, customer_id: '' })}
+                        >
+                          {form.isNewCustomer ? 'Select Existing' : <><UserPlus size={12} /> Add New Customer</>}
+                        </button>
+                      </div>
+                      {form.isNewCustomer ? (
+                        <div className="grid grid-cols-2 gap-10">
+                          <input className="input" placeholder="Customer Name" value={form.newCustomerName} onChange={e => setForm({ ...form, newCustomerName: e.target.value })} />
+                          <input className="input" placeholder="Contact Number" value={form.newCustomerPhone} onChange={e => setForm({ ...form, newCustomerPhone: e.target.value })} />
+                        </div>
+                      ) : (
+                        <select className="input" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} title="Select Customer">
+                          <option value="">— Select Customer —</option>
+                          {customers.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.phone})</option>)}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label">Due Date *</label>
+                      <input className="input" type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} title="Due Date" />
+                    </div>
+                    <div>
+                      <label className="label">Interest Rate (%)</label>
+                      <input className="input" type="number" value={form.interest_rate} onChange={e => {
+                        const rate = e.target.value;
+                        const cost = form.cost_price || '0';
+                        const sell = parseFloat(cost) + (parseFloat(cost) * parseFloat(rate) / 100);
+                        setForm({ ...form, interest_rate: rate, selling_price: sell.toFixed(2) });
+                      }} title="Interest Rate" />
+                    </div>
+                    <div>
+                      <label className="label">Interest Period</label>
+                      <select className="input" value={form.interest_period} onChange={e => setForm({ ...form, interest_period: e.target.value })} title="Interest Period">
+                        {PERIODS.map(p => <option key={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="full">
                 <label className="label">Serial Number</label>
                 <input className="input" value={form.serial_number} onChange={e => setForm({ ...form, serial_number: e.target.value })} placeholder="Optional" />
               </div>
-              <div>
-                <label className="label">Customer (Seller)</label>
-                <select className="input" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} title="Customer">
-                  <option value="">— None —</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                </select>
-              </div>
+              {form.status !== 'Buyback' && (
+                <div>
+                  <label className="label">Customer (Seller)</label>
+                  <select className="input" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} title="Customer">
+                    <option value="">— None —</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="full">
                 <label className="label">Description</label>
                 <input className="input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Optional description" />

@@ -420,6 +420,9 @@ tr:hover td { background: var(--bg-elevated); }
 .pointer { cursor: pointer; }
 .border-danger { border-color: var(--danger) !important; }
 .bg-danger { background: var(--danger) !important; }
+.bg-gold-faint { background: rgba(192, 21, 42, 0.04) !important; }
+.border-gold-dim { border: 1px solid rgba(192, 21, 42, 0.2) !important; }
+.rounded-xl { border-radius: 12px; }
 
 /* ═══════════════════════════════════════════════
    LOGIN PAGE
