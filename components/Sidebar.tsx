@@ -16,7 +16,7 @@ import { createAuthClient } from '@/lib/supabase-auth';
 const nav = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/inventory', label: 'Inventory', icon: Package },
-  { href: '/loans', label: 'Buybacks / Loans', icon: Handshake },
+  { href: '/buybacks', label: 'Buybacks', icon: Handshake },
   { href: '/customers', label: 'Customers', icon: Users },
 ];
 

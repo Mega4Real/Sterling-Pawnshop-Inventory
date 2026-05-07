@@ -4,7 +4,7 @@ A full-stack pawnshop manager built with Next.js 14, Supabase, and deployed on V
 
 ## Features
 - 📦 **Inventory** — Track items with cost price, selling price, profit margin
-- 🤝 **Buybacks/Loans** — Manage loans with collateral, interest, due dates, overdue alerts
+- 🤝 **Buybacks** — Manage buybacks with collateral, interest, due dates, overdue alerts
 - 👥 **Customers** — Customer records with ID verification fields
 - 📊 **Dashboard** — Live stats, overdue alerts, revenue overview
 

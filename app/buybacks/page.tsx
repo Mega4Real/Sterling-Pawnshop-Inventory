@@ -1,20 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabase, Loan, Customer, InventoryItem } from '@/lib/supabase';
+import { supabase, Loan as Buyback, Customer, InventoryItem } from '@/lib/supabase';
 import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2 } from 'lucide-react';
 import { format, isPast, isToday, differenceInDays } from 'date-fns';
 
 const PERIODS = ['Daily', 'Weekly', 'Monthly'];
 const STATUSES = ['Active', 'Redeemed', 'Forfeited', 'Extended'];
 
-export default function LoansPage() {
-  const [loans, setLoans] = useState<Loan[]>([]);
+export default function BuybacksPage() {
+  const [buybacks, setBuybacks] = useState<Buyback[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Active');
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState<Loan | null>(null);
+  const [editing, setEditing] = useState<Buyback | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(defaultForm());
@@ -32,10 +32,10 @@ export default function LoansPage() {
     const { data } = await supabase.from('loans')
       .select('*, customers(full_name, phone), inventory(item_name, category)')
       .order('created_at', { ascending: false });
-    setLoans(data || []);
+    setBuybacks(data || []);
     const { data: c } = await supabase.from('customers').select('*').order('full_name');
     setCustomers(c || []);
-    const { data: inv } = await supabase.from('inventory').select('*').in('status', ['Available', 'On Loan']).order('item_name');
+    const { data: inv } = await supabase.from('inventory').select('*').in('status', ['Available', 'Buyback']).order('item_name');
     setInventory(inv || []);
     setLoading(false);
   }
@@ -48,21 +48,21 @@ export default function LoansPage() {
     setShowModal(true);
   }
 
-  function openEdit(loan: Loan) {
+  function openEdit(buyback: Buyback) {
     setForm({
-      customer_id: loan.customer_id,
-      inventory_id: loan.inventory_id || '',
-      loan_amount: String(loan.loan_amount),
-      interest_rate: String(loan.interest_rate),
-      interest_period: loan.interest_period,
-      due_date: loan.due_date,
-      notes: loan.notes || '',
-      status: loan.status,
+      customer_id: buyback.customer_id,
+      inventory_id: buyback.inventory_id || '',
+      loan_amount: String(buyback.loan_amount),
+      interest_rate: String(buyback.interest_rate),
+      interest_period: buyback.interest_period,
+      due_date: buyback.due_date,
+      notes: buyback.notes || '',
+      status: buyback.status,
       isNewCustomer: false,
       newCustomerName: '',
       newCustomerPhone: ''
     });
-    setEditing(loan);
+    setEditing(buyback);
     setShowModal(true);
   }
 
@@ -116,17 +116,17 @@ export default function LoansPage() {
       }
 
       if (error) {
-        console.error('Loan Error:', error);
-        alert(`Error saving loan: ${error.message}`);
+        console.error('Buyback Error:', error);
+        alert(`Error saving buyback: ${error.message}`);
         return;
       }
 
-      // Mark item as On Loan
+      // Mark item as Buyback
       if (form.inventory_id) {
-        const { error: invError } = await supabase.from('inventory').update({ status: 'On Loan' }).eq('id', form.inventory_id);
+        const { error: invError } = await supabase.from('inventory').update({ status: 'Buyback' }).eq('id', form.inventory_id);
         if (invError) {
           console.error('Inventory Update Error:', invError);
-          alert(`Loan created, but failed to update item status: ${invError.message}`);
+          alert(`Buyback created, but failed to update item status: ${invError.message}`);
         }
       }
 
@@ -144,7 +144,7 @@ export default function LoansPage() {
     try {
       const { error } = await supabase.from('loans').delete().eq('id', deleteConfirmId);
       if (error) {
-        alert(`Error deleting loan: ${error.message}`);
+        alert(`Error deleting buyback: ${error.message}`);
       } else {
         load();
       }
@@ -155,34 +155,34 @@ export default function LoansPage() {
     }
   }
 
-  async function updateStatus(loan: Loan, newStatus: string) {
+  async function updateStatus(buyback: Buyback, newStatus: string) {
     const today = format(new Date(), 'yyyy-MM-dd');
-    const { error: loanError } = await supabase.from('loans').update({
+    const { error: buybackError } = await supabase.from('loans').update({
       status: newStatus,
       date_closed: ['Redeemed', 'Forfeited'].includes(newStatus) ? today : null
-    }).eq('id', loan.id);
+    }).eq('id', buyback.id);
 
-    if (loanError) {
-      alert(`Error updating loan: ${loanError.message}`);
+    if (buybackError) {
+      alert(`Error updating buyback: ${buybackError.message}`);
       return;
     }
 
     // If closed, update the inventory item
-    if (['Redeemed', 'Forfeited'].includes(newStatus) && loan.inventory_id) {
+    if (['Redeemed', 'Forfeited'].includes(newStatus) && buyback.inventory_id) {
       const invStatus = newStatus === 'Redeemed' ? 'Sold' : 'Available';
       const { error: invError } = await supabase.from('inventory').update({ 
         status: invStatus,
         date_sold: newStatus === 'Redeemed' ? today : null
-      }).eq('id', loan.inventory_id);
+      }).eq('id', buyback.inventory_id);
       
       if (invError) {
-        alert(`Loan updated, but failed to update inventory status: ${invError.message}`);
+        alert(`Buyback updated, but failed to update inventory status: ${invError.message}`);
       }
     }
     load();
   }
 
-  const filtered = loans.filter(l => {
+  const filtered = buybacks.filter(l => {
     const name = (l.customers as any)?.full_name?.toLowerCase() || '';
     const item = (l.inventory as any)?.item_name?.toLowerCase() || '';
     const matchSearch = name.includes(search.toLowerCase()) || item.includes(search.toLowerCase());
@@ -201,10 +201,10 @@ export default function LoansPage() {
     <div className="mb-24">
       <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">Buybacks & Loans</h1>
-          <p className="text-muted">{loans.filter(l => l.status === 'Active').length} active loans</p>
+          <h1 className="text-3xl mb-4">Buybacks</h1>
+          <p className="text-muted">{buybacks.filter(l => l.status === 'Active').length} active buybacks</p>
         </div>
-        <button className="btn-gold" onClick={openAdd}><Plus size={16} /> New Loan</button>
+        <button className="btn-gold" onClick={openAdd}><Plus size={16} /> New Buyback</button>
       </div>
 
       <div className="search-container">
@@ -228,7 +228,7 @@ export default function LoansPage() {
           <table>
             <thead>
               <tr>
-                <th>Customer</th><th>Item</th><th>Loan</th><th>Interest</th>
+                <th>Customer</th><th>Item</th><th>Buyback</th><th>Interest</th>
                 <th>Total Due</th><th>Due Date</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
@@ -236,13 +236,13 @@ export default function LoansPage() {
               {loading ? (
                 <tr><td colSpan={8} className="text-center text-muted p-40">Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center text-muted p-40">No loans found</td></tr>
-              ) : filtered.map(loan => {
-                const dl = daysLabel(loan.due_date);
-                const cust = loan.customers as any;
-                const inv = loan.inventory as any;
+                <tr><td colSpan={8} className="text-center text-muted p-40">No buybacks found</td></tr>
+              ) : filtered.map(buyback => {
+                const dl = daysLabel(buyback.due_date);
+                const cust = buyback.customers as any;
+                const inv = buyback.inventory as any;
                 return (
-                  <tr key={loan.id}>
+                  <tr key={buyback.id}>
                     <td>
                       <div className="font-medium">{cust?.full_name}</div>
                       <div className="text-muted text-sm">{cust?.phone}</div>
@@ -251,26 +251,26 @@ export default function LoansPage() {
                       <div>{inv?.item_name || '—'}</div>
                       <div className="text-muted text-sm">{inv?.category}</div>
                     </td>
-                    <td>GH₵ {loan.loan_amount?.toFixed(2)}</td>
-                    <td className="text-muted">{loan.interest_rate}% / {loan.interest_period}</td>
-                    <td className="font-semibold text-gold">GH₵ {loan.total_due?.toFixed(2)}</td>
+                    <td>GH₵ {buyback.loan_amount?.toFixed(2)}</td>
+                    <td className="text-muted">{buyback.interest_rate}% / {buyback.interest_period}</td>
+                    <td className="font-semibold text-gold">GH₵ {buyback.total_due?.toFixed(2)}</td>
                     <td>
-                      <div>{format(new Date(loan.due_date), 'dd MMM yyyy')}</div>
-                      {loan.status === 'Active' && <div className="text-xs" style={{ color: dl.color }}>{dl.label}</div>}
+                      <div>{format(new Date(buyback.due_date), 'dd MMM yyyy')}</div>
+                      {buyback.status === 'Active' && <div className="text-xs" style={{ color: dl.color }}>{dl.label}</div>}
                     </td>
-                    <td><LoanBadge status={loan.status} /></td>
+                    <td><BuybackBadge status={buyback.status} /></td>
                     <td>
                       <div className="flex gap-6">
-                        {loan.status === 'Active' && (
+                        {buyback.status === 'Active' && (
                           <>
-                            <button className="btn-gold p-4 text-xs" onClick={() => updateStatus(loan, 'Redeemed')}>Redeemed</button>
-                            <button className="btn-ghost p-4 text-xs text-danger border-danger" onClick={() => updateStatus(loan, 'Forfeited')}>Forfeit</button>
+                            <button className="btn-gold p-4 text-xs" onClick={() => updateStatus(buyback, 'Redeemed')}>Redeemed</button>
+                            <button className="btn-ghost p-4 text-xs text-danger border-danger" onClick={() => updateStatus(buyback, 'Forfeited')}>Forfeit</button>
                           </>
                         )}
-                        <button className="btn-ghost p-6 text-sm" onClick={() => openEdit(loan)} title="Edit Loan">
+                        <button className="btn-ghost p-6 text-sm" onClick={() => openEdit(buyback)} title="Edit Buyback">
                           <Edit2 size={12} />
                         </button>
-                        <button className="btn-ghost p-6 text-sm text-muted" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(loan.id); }} title="Delete Loan">
+                        <button className="btn-ghost p-6 text-sm text-muted" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(buyback.id); }} title="Delete Buyback">
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -287,7 +287,7 @@ export default function LoansPage() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-xl">{editing ? 'Edit Loan' : 'New Loan / Buyback'}</h2>
+              <h2 className="text-xl">{editing ? 'Edit Buyback' : 'New Buyback'}</h2>
               <button className="btn-ghost p-6" onClick={() => setShowModal(false)} title="Close"><X size={16} /></button>
             </div>
             <div className="form-grid">
@@ -348,7 +348,7 @@ export default function LoansPage() {
                 </select>
               </div>
               <div>
-                <label className="label">Loan Amount (GH₵) *</label>
+                <label className="label">Buyback Amount (GH₵) *</label>
                 <input className="input" type="number" min="0" step="0.01" value={form.loan_amount} onChange={e => setForm({ ...form, loan_amount: e.target.value })} placeholder="0.00" />
               </div>
               <div>
@@ -381,7 +381,7 @@ export default function LoansPage() {
             <div className="modal-footer">
               <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn-gold" onClick={save} disabled={(!form.customer_id && !form.isNewCustomer) || !form.loan_amount || !form.due_date}>
-                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Create Loan'}
+                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Create Buyback'}
               </button>
             </div>
           </div>
@@ -394,9 +394,9 @@ export default function LoansPage() {
             <div className="text-danger mb-16">
               <Trash2 size={48} strokeWidth={1.5} />
             </div>
-            <h2 className="text-2xl mb-12">Delete Loan?</h2>
+            <h2 className="text-2xl mb-12">Delete Buyback?</h2>
             <p className="text-muted mb-24">
-              Are you sure you want to delete this loan record? This action cannot be undone.
+              Are you sure you want to delete this buyback record? This action cannot be undone.
             </p>
             <div className="flex gap-12 justify-center">
               <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
@@ -411,7 +411,7 @@ export default function LoansPage() {
   );
 }
 
-function LoanBadge({ status }: { status: string }) {
+function BuybackBadge({ status }: { status: string }) {
   const map: Record<string, string> = { Active: 'badge-yellow', Redeemed: 'badge-green', Forfeited: 'badge-red', Extended: 'badge-blue' };
   return <span className={`badge ${map[status] || 'badge-gray'}`}>{status}</span>;
 }

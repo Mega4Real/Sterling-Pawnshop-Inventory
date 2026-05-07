@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 
 const CATEGORIES = ['Electronics', 'Jewelry', 'Clothing', 'Tools', 'Musical Instruments', 'Watches', 'Bags', 'Other'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
-const STATUSES = ['Available', 'Sold', 'On Loan'];
+const STATUSES = ['Available', 'Sold', 'Buyback'];
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -124,7 +124,7 @@ export default function InventoryPage() {
           <Search size={14} className="search-icon" />
           <input className="input search-input" placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {['All', 'Available', 'Sold', 'On Loan'].map(s => (
+        {['All', 'Available', 'Sold', 'Buyback'].map(s => (
           <button 
             key={s} 
             onClick={() => setFilter(s)} 
@@ -262,7 +262,7 @@ export default function InventoryPage() {
             </div>
             <h2 className="text-2xl mb-12">Delete Item?</h2>
             <p className="text-muted mb-24">
-              Are you sure you want to delete this inventory item? This action cannot be undone and may affect associated loans.
+              Are you sure you want to delete this inventory item? This action cannot be undone and may affect associated buybacks.
             </p>
             <div className="flex gap-12 justify-center">
               <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
@@ -278,6 +278,6 @@ export default function InventoryPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = { Available: 'badge-green', Sold: 'badge-blue', 'On Loan': 'badge-yellow' };
+  const map: Record<string, string> = { Available: 'badge-green', Sold: 'badge-blue', Buyback: 'badge-yellow' };
   return <span className={`badge ${map[status] || 'badge-gray'}`}>{status}</span>;
 }

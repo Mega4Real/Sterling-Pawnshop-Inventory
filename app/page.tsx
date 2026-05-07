@@ -8,9 +8,9 @@ import Link from 'next/link';
 export default function Dashboard() {
   const [stats, setStats] = useState({
     totalItems: 0, availableItems: 0, soldItems: 0,
-    activeLoans: 0, overdueLoans: 0, dueSoonLoans: 0,
+    activeBuybacks: 0, overdueBuybacks: 0, dueSoonBuybacks: 0,
     totalCustomers: 0,
-    stockValue: 0, potentialRevenue: 0, totalLoanValue: 0,
+    stockValue: 0, potentialRevenue: 0, totalBuybackValue: 0,
   });
   const [overdueList, setOverdueList] = useState<any[]>([]);
   const [dueSoon, setDueSoon] = useState<any[]>([]);
@@ -39,13 +39,13 @@ export default function Dashboard() {
         totalItems: items.length,
         availableItems: items.filter(i => i.status === 'Available').length,
         soldItems: items.filter(i => i.status === 'Sold').length,
-        activeLoans: loanList.length,
-        overdueLoans: overdue.length,
-        dueSoonLoans: nearDue.length,
+        activeBuybacks: loanList.length,
+        overdueBuybacks: overdue.length,
+        dueSoonBuybacks: nearDue.length,
         totalCustomers: (customers.data || []).length,
         stockValue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.cost_price, 0),
         potentialRevenue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.selling_price, 0),
-        totalLoanValue: loanList.reduce((s, l) => s + l.total_due, 0),
+        totalBuybackValue: loanList.reduce((s, l) => s + l.total_due, 0),
       });
       setOverdueList(overdue);
       setDueSoon(nearDue);
@@ -74,8 +74,8 @@ export default function Dashboard() {
         <StatCard label="Available Items" value={stats.availableItems} icon={<Package size={18} />} color="var(--gold)" />
         <StatCard label="Stock Cost Value" value={fmt(stats.stockValue)} icon={<DollarSign size={18} />} color="var(--gold)" small />
         <StatCard label="Potential Revenue" value={fmt(stats.potentialRevenue)} icon={<TrendingUp size={18} />} color="var(--success)" small />
-        <StatCard label="Active Loans" value={stats.activeLoans} icon={<Handshake size={18} />} color="var(--info)" />
-        <StatCard label="Loan Value Due" value={fmt(stats.totalLoanValue)} icon={<DollarSign size={18} />} color="var(--info)" small />
+        <StatCard label="Active Buybacks" value={stats.activeBuybacks} icon={<Handshake size={18} />} color="var(--info)" />
+        <StatCard label="Buyback Value Due" value={fmt(stats.totalBuybackValue)} icon={<DollarSign size={18} />} color="var(--info)" small />
         <StatCard label="Customers" value={stats.totalCustomers} icon={<Users size={18} />} color="var(--text-muted)" />
       </div>
 
@@ -85,12 +85,12 @@ export default function Dashboard() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <AlertTriangle size={16} color="var(--danger)" />
-            <h3 style={{ fontSize: 15 }}>Overdue Loans ({stats.overdueLoans})</h3>
+            <h3 style={{ fontSize: 15 }}>Overdue Buybacks ({stats.overdueBuybacks})</h3>
           </div>
           {overdueList.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No overdue loans 🎉</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No overdue buybacks 🎉</p>
           ) : overdueList.map(l => (
-            <Link key={l.id} href="/loans" style={{ textDecoration: 'none' }}>
+            <Link key={l.id} href="/buybacks" style={{ textDecoration: 'none' }}>
               <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -111,12 +111,12 @@ export default function Dashboard() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <AlertTriangle size={16} color="var(--warning)" />
-            <h3 style={{ fontSize: 15 }}>Due in 3 Days ({stats.dueSoonLoans})</h3>
+            <h3 style={{ fontSize: 15 }}>Due in 3 Days ({stats.dueSoonBuybacks})</h3>
           </div>
           {dueSoon.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Nothing due soon</p>
           ) : dueSoon.map(l => (
-            <Link key={l.id} href="/loans" style={{ textDecoration: 'none' }}>
+            <Link key={l.id} href="/buybacks" style={{ textDecoration: 'none' }}>
               <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>

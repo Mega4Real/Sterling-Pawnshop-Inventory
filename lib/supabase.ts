@@ -36,7 +36,7 @@ export type InventoryItem = {
   customers?: Customer;
 };
 
-export type Loan = {
+export type Buyback = {
   id: string;
   customer_id: string;
   inventory_id: string;
