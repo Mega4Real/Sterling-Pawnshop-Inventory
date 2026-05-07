@@ -80,7 +80,7 @@ export default function Dashboard() {
       </div>
 
       {/* Alerts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="grid md:grid-cols-2 gap-16">
         {/* Overdue */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>

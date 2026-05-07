@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase, Customer } from '@/lib/supabase';
-import { Plus, Search, X, CheckCircle, Edit2, User } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, Edit2, User, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const ID_TYPES = ['Ghana Card', 'Passport', 'Voter ID', 'Driver License', 'Other'];
@@ -48,6 +48,18 @@ export default function CustomersPage() {
     setEditing(c); setShowModal(true);
   }
 
+  async function remove(id: string) {
+    if (!confirm('Are you sure you want to delete this customer? This will fail if they have linked buybacks or inventory.')) return;
+    
+    const { error } = await supabase.from('customers').delete().eq('id', id);
+    if (error) {
+      alert(`Error deleting customer: ${error.message}`);
+    } else {
+      load();
+      if (selected?.id === id) setSelected(null);
+    }
+  }
+
   async function save() {
     try {
       let error;
@@ -87,7 +99,7 @@ export default function CustomersPage() {
         <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Add Customer</button>
       </div>
 
-      <div className="flex gap-16">
+      <div className="flex flex-col md:flex-row gap-16">
         {/* List */}
         <div className="flex-1">
           <div className="search-wrapper mb-16">
@@ -126,9 +138,14 @@ export default function CustomersPage() {
                       </td>
                       <td className="text-muted text-sm">{format(new Date(c.created_at), 'dd MMM yy')}</td>
                       <td>
-                        <button className="btn-ghost p-6 text-sm" onClick={e => { e.stopPropagation(); openEdit(c); }}>
-                          <Edit2 size={12} /> Edit
-                        </button>
+                        <div className="flex gap-4">
+                          <button className="btn-ghost p-6 text-sm" onClick={e => { e.stopPropagation(); openEdit(c); }}>
+                            <Edit2 size={12} /> Edit
+                          </button>
+                          <button className="btn-ghost p-6 text-sm text-danger" onClick={e => { e.stopPropagation(); remove(c.id); }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -140,11 +157,14 @@ export default function CustomersPage() {
 
         {/* Detail panel */}
         {selected && (
-          <div style={{ width: 260 }} className="flex-shrink-0">
+          <div className="w-full md:w-[280px] flex-shrink-0">
             <div className="card">
               <div className="modal-header">
                 <h3 className="text-lg">{selected.full_name}</h3>
-                <button className="btn-ghost p-4" onClick={() => setSelected(null)} title="Close"><X size={14} /></button>
+                <div className="flex gap-4">
+                  <button className="btn-ghost p-4" onClick={() => remove(selected.id)} title="Delete Customer"><Trash2 size={14} color="var(--danger)" /></button>
+                  <button className="btn-ghost p-4" onClick={() => setSelected(null)} title="Close"><X size={14} /></button>
+                </div>
               </div>
               <div className="flex flex-col gap-10">
                 {[

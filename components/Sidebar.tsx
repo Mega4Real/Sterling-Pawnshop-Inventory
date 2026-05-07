@@ -202,23 +202,50 @@ export default function Sidebar() {
       </div>
 
       {/* Mobile hamburger toggle */}
-      <div className="md:hidden" style={{ position: 'fixed', top: 16, left: 16, zIndex: 200 }}>
-        <button className="btn-ghost" style={{ padding: 8 }} onClick={() => setOpen(!open)}>
-          {open ? <X size={20} /> : <Menu size={20} />}
+      <div className="md:hidden" style={{ position: 'fixed', top: 12, left: 12, zIndex: 200 }}>
+        <button 
+          className="btn-ghost" 
+          style={{ 
+            padding: 8, 
+            background: 'var(--bg-card)', 
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            borderRadius: '50%'
+          }} 
+          onClick={() => setOpen(!open)}
+        >
+          {open ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
       {/* Mobile drawer overlay */}
-      {open && (
+      <div
+        className="md:hidden"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 150,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease',
+        }}
+        onClick={() => setOpen(false)}
+      >
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 150 }}
-          onClick={() => setOpen(false)}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            transform: open ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.3s ease',
+          }}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }}>
-            <SidebarContent />
-          </div>
+          <SidebarContent />
         </div>
-      )}
+      </div>
     </>
   );
 }

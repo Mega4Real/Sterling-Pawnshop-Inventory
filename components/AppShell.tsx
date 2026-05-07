@@ -32,12 +32,11 @@ export default function AppShell({ children }: AppShellProps) {
 
   // All other pages get the sidebar + main layout
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="flex" style={{ minHeight: '100vh' }}>
       <Sidebar />
       <main
+        className="app-container flex-1"
         style={{
-          flex: 1,
-          padding: '32px',
           overflowY: 'auto',
           maxHeight: '100vh',
         }}
