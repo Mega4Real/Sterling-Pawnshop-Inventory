@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
-import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2, MessageSquare } from 'lucide-react';
 import { format, isPast, isToday, differenceInDays, addDays } from 'date-fns';
+import { sendBuybackReminderAction } from './sms-actions';
+import { useToast } from '@/components/Toast';
 
 const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 const STATUSES = ['Active', 'Redeemed', 'Forfeited', 'Extended'];
@@ -17,7 +19,9 @@ export default function BuybacksPage() {
   const [editing, setEditing] = useState<Buyback | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sendingSmsId, setSendingSmsId] = useState<string | null>(null);
   const [form, setForm] = useState(defaultForm());
+  const { showToast } = useToast();
 
   function calculateDueDate(startDate: string, period: string) {
     if (!startDate) return '';
@@ -91,7 +95,7 @@ export default function BuybacksPage() {
       // Create new customer if needed
       if (form.isNewCustomer) {
         if (!form.newCustomerName) {
-          alert('Please enter the customer name');
+          showToast('error', 'Required Field', 'Please enter the customer name');
           return;
         }
         const { data: newCust, error: custError } = await supabase.from('customers').insert({
@@ -100,7 +104,7 @@ export default function BuybacksPage() {
         }).select().single();
 
         if (custError) {
-          alert(`Error creating customer: ${custError.message}`);
+          showToast('error', 'Database Error', `Error creating customer: ${custError.message}`);
           return;
         }
         finalCustomerId = newCust.id;
@@ -130,7 +134,7 @@ export default function BuybacksPage() {
 
       if (error) {
         console.error('Buyback Error:', error);
-        alert(`Error saving buyback: ${error.message}`);
+        showToast('error', 'Save Failed', error.message);
         return;
       }
 
@@ -139,9 +143,11 @@ export default function BuybacksPage() {
         const { error: invError } = await supabase.from('inventory').update({ status: 'Buyback' }).eq('id', form.inventory_id);
         if (invError) {
           console.error('Inventory Update Error:', invError);
-          alert(`Buyback created, but failed to update item status: ${invError.message}`);
+          showToast('info', 'Note', `Buyback created, but failed to update item status: ${invError.message}`);
         }
       }
+
+      showToast('success', editing ? 'Updated' : 'Created', editing ? 'Buyback updated successfully.' : 'New buyback created successfully.');
 
       setShowModal(false);
       load();
@@ -163,7 +169,7 @@ export default function BuybacksPage() {
         // or we delete both for absolute certainty and "vice versa" behavior
         const { error: invError } = await supabase.from('inventory').delete().eq('id', loan.inventory_id);
         if (invError) {
-          alert(`Error deleting associated inventory item: ${invError.message}`);
+          showToast('error', 'Delete Failed', `Error deleting associated inventory item: ${invError.message}`);
           return;
         }
       }
@@ -171,8 +177,9 @@ export default function BuybacksPage() {
       // Delete the loan itself (redundant if inventory delete cascades, but safe)
       const { error } = await supabase.from('loans').delete().eq('id', deleteConfirmId);
       if (error) {
-        alert(`Error deleting buyback: ${error.message}`);
+        showToast('error', 'Delete Failed', error.message);
       } else {
+        showToast('success', 'Deleted', 'Buyback record deleted successfully.');
         load();
       }
     } catch (err) {
@@ -190,7 +197,7 @@ export default function BuybacksPage() {
     }).eq('id', buyback.id);
 
     if (buybackError) {
-      alert(`Error updating buyback: ${buybackError.message}`);
+      showToast('error', 'Update Failed', buybackError.message);
       return;
     }
 
@@ -203,10 +210,23 @@ export default function BuybacksPage() {
       }).eq('id', buyback.inventory_id);
       
       if (invError) {
-        alert(`Buyback updated, but failed to update inventory status: ${invError.message}`);
+        showToast('info', 'Note', `Buyback status updated, but failed to update inventory: ${invError.message}`);
       }
     }
+    showToast('success', 'Status Updated', `Buyback is now marked as ${newStatus}.`);
     load();
+  }
+
+  async function sendReminder(buybackId: string) {
+    setSendingSmsId(buybackId);
+    const res = await sendBuybackReminderAction(buybackId);
+    setSendingSmsId(null);
+    
+    if (res.success) {
+      showToast('success', 'SMS Sent', 'Reminder message has been sent to the customer.');
+    } else {
+      showToast('error', 'SMS Failed', res.message || 'Could not send reminder.');
+    }
   }
 
   const filtered = buybacks.filter(l => {
@@ -294,6 +314,14 @@ export default function BuybacksPage() {
                             <button className="btn-ghost p-4 text-xs text-danger border-danger" onClick={() => updateStatus(buyback, 'Forfeited')}>Forfeit</button>
                           </>
                         )}
+                        <button 
+                          className={`btn-ghost p-6 text-sm ${sendingSmsId === buyback.id ? 'opacity-50 pointer-events-none' : ''}`} 
+                          onClick={() => sendReminder(buyback.id)} 
+                          title="Send SMS Reminder"
+                          disabled={buyback.status !== 'Active' || sendingSmsId === buyback.id}
+                        >
+                          <MessageSquare size={12} className={sendingSmsId === buyback.id ? 'animate-pulse' : ''} />
+                        </button>
                         <button className="btn-ghost p-6 text-sm" onClick={() => openEdit(buyback)} title="Edit Buyback">
                           <Edit2 size={12} />
                         </button>

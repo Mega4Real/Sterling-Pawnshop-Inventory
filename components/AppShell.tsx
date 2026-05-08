@@ -12,6 +12,7 @@
 
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
+import { ToastProvider } from './Toast';
 
 interface AppShellProps {
   /** The page content rendered by Next.js */
@@ -27,22 +28,28 @@ export default function AppShell({ children }: AppShellProps) {
 
   // Login page renders without any chrome
   if (pathname === '/login') {
-    return <>{children}</>;
+    return (
+      <ToastProvider>
+        {children}
+      </ToastProvider>
+    );
   }
 
   // All other pages get the sidebar + main layout
   return (
-    <div className="flex" style={{ minHeight: '100vh' }}>
-      <Sidebar />
-      <main
-        className="app-container flex-1"
-        style={{
-          overflowY: 'auto',
-          maxHeight: '100vh',
-        }}
-      >
-        {children}
-      </main>
-    </div>
+    <ToastProvider>
+      <div className="flex" style={{ minHeight: '100vh' }}>
+        <Sidebar />
+        <main
+          className="app-container flex-1"
+          style={{
+            overflowY: 'auto',
+            maxHeight: '100vh',
+          }}
+        >
+          {children}
+        </main>
+      </div>
+    </ToastProvider>
   );
 }
