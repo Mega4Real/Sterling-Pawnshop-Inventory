@@ -2,9 +2,9 @@
 import { useEffect, useState } from 'react';
 import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
 import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2 } from 'lucide-react';
-import { format, isPast, isToday, differenceInDays } from 'date-fns';
+import { format, isPast, isToday, differenceInDays, addDays } from 'date-fns';
 
-const PERIODS = ['2 Weeks', '3 Weeks', '1 Month', '2 Months'];
+const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 const STATUSES = ['Active', 'Redeemed', 'Forfeited', 'Extended'];
 
 export default function BuybacksPage() {
@@ -19,12 +19,25 @@ export default function BuybacksPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(defaultForm());
 
+  function calculateDueDate(startDate: string, period: string) {
+    if (!startDate) return '';
+    const base = new Date(startDate);
+    let days = 30;
+    if (period === '1 Week') days = 7;
+    else if (period === '2 Weeks') days = 14;
+    else if (period === '3 Weeks') days = 21;
+    else if (period === '1 Month') days = 30;
+    else if (period === '2 Months') days = 60;
+    return format(addDays(base, days), 'yyyy-MM-dd');
+  }
+
   function defaultForm() {
+    const today = format(new Date(), 'yyyy-MM-dd');
     return {
       customer_id: '', inventory_id: '', loan_amount: '',
       interest_rate: '10', interest_period: '1 Month',
-      due_date: '', notes: '', status: 'Active',
-      total_due: '',
+      due_date: calculateDueDate(today, '1 Month'), notes: '', status: 'Active',
+      total_due: '', date_issued: today,
       isNewCustomer: false, newCustomerName: '', newCustomerPhone: ''
     };
   }
@@ -60,6 +73,7 @@ export default function BuybacksPage() {
       notes: buyback.notes || '',
       status: buyback.status,
       total_due: String(buyback.total_due),
+      date_issued: buyback.date_issued || format(new Date(buyback.created_at), 'yyyy-MM-dd'),
       isNewCustomer: false,
       newCustomerName: '',
       newCustomerPhone: ''
@@ -104,6 +118,7 @@ export default function BuybacksPage() {
         total_due: parseFloat(form.total_due),
         status: form.status,
         notes: form.notes,
+        date_issued: form.date_issued,
       };
       
       let error;
@@ -364,9 +379,12 @@ export default function BuybacksPage() {
                   setForm({ ...form, interest_rate: rate, total_due: total.toFixed(2) });
                 }} title="Interest Rate" />
               </div>
-              <div>
+               <div>
                 <label className="label">Interest Period</label>
-                <select className="input" value={form.interest_period} onChange={e => setForm({ ...form, interest_period: e.target.value })} title="Interest Period">
+                <select className="input" value={form.interest_period} onChange={e => {
+                  const newPeriod = e.target.value;
+                  setForm({ ...form, interest_period: newPeriod, due_date: calculateDueDate(form.date_issued, newPeriod) });
+                }} title="Interest Period">
                   {PERIODS.map(p => <option key={p}>{p}</option>)}
                 </select>
               </div>

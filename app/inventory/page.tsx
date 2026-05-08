@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase, InventoryItem, Customer } from '@/lib/supabase';
 import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText, FileUp, FileDown, FileSpreadsheet } from 'lucide-react';
-import { format, addMonths } from 'date-fns';
+import { format, addMonths, addDays } from 'date-fns';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -10,7 +10,7 @@ import autoTable from 'jspdf-autotable';
 const CATEGORIES = ['Electronics', 'Jewelry', 'Clothing', 'Tools', 'Musical Instruments', 'Watches', 'Bags', 'Other'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 const STATUSES = ['Available', 'Sold', 'Buyback'];
-const PERIODS = ['2 Weeks', '3 Weeks', '1 Month', '2 Months'];
+const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -24,6 +24,18 @@ export default function InventoryPage() {
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(defaultForm());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function calculateDueDate(startDate: string, period: string) {
+    if (!startDate) return '';
+    const base = new Date(startDate);
+    let days = 30;
+    if (period === '1 Week') days = 7;
+    else if (period === '2 Weeks') days = 14;
+    else if (period === '3 Weeks') days = 21;
+    else if (period === '1 Month') days = 30;
+    else if (period === '2 Months') days = 60;
+    return format(addDays(base, days), 'yyyy-MM-dd');
+  }
 
   function defaultForm() {
     return {
@@ -525,7 +537,10 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label className="label">Date Acquired</label>
-                <input className="input" type="date" value={form.date_acquired} onChange={e => setForm({ ...form, date_acquired: e.target.value })} title="Date Acquired" />
+                <input className="input" type="date" value={form.date_acquired} onChange={e => {
+                  const newDate = e.target.value;
+                  setForm({ ...form, date_acquired: newDate, due_date: calculateDueDate(newDate, form.interest_period) });
+                }} title="Date Acquired" />
               </div>
 
               {form.status === 'Buyback' && (
@@ -572,7 +587,10 @@ export default function InventoryPage() {
                     </div>
                     <div>
                       <label className="label">Interest Period</label>
-                      <select className="input" value={form.interest_period} onChange={e => setForm({ ...form, interest_period: e.target.value })} title="Interest Period">
+                      <select className="input" value={form.interest_period} onChange={e => {
+                        const newPeriod = e.target.value;
+                        setForm({ ...form, interest_period: newPeriod, due_date: calculateDueDate(form.date_acquired, newPeriod) });
+                      }} title="Interest Period">
                         {PERIODS.map(p => <option key={p}>{p}</option>)}
                       </select>
                     </div>
