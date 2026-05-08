@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const CATEGORIES = ['Electronics', 'Jewelry', 'Clothing', 'Tools', 'Musical Instruments', 'Watches', 'Bags', 'Other'];
+const CATEGORIES = ['Electronics', 'Television', 'Refrigerator', 'Laptop', 'Phone', 'Game', 'Car', 'Air Conditioner', 'Others'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 const STATUSES = ['Available', 'Sold', 'Buyback'];
 const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];

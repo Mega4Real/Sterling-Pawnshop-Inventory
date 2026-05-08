@@ -29,7 +29,7 @@ create table inventory (
   id uuid primary key default uuid_generate_v4(),
   item_name text not null,
   description text,
-  category text, -- e.g. Electronics, Jewelry, Clothing
+  category text, -- e.g. Electronics, Phone, Television, Refrigerator
   condition text default 'Good', -- Good, Fair, Poor
   cost_price numeric(10,2) not null,
   selling_price numeric(10,2) not null,
