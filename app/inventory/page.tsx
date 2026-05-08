@@ -1,8 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase, InventoryItem, Customer } from '@/lib/supabase';
-import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText } from 'lucide-react';
+import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText, FileUp, FileDown, FileSpreadsheet } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const CATEGORIES = ['Electronics', 'Jewelry', 'Clothing', 'Tools', 'Musical Instruments', 'Watches', 'Bags', 'Other'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
@@ -18,7 +21,9 @@ export default function InventoryPage() {
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(defaultForm());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function defaultForm() {
     return {
@@ -161,6 +166,200 @@ export default function InventoryPage() {
     }
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        if (data.length === 0) {
+          alert('No data found in Excel sheet');
+          setImporting(false);
+          return;
+        }
+
+        let importedCount = 0;
+        let skipCount = 0;
+
+        for (const row of data) {
+          // Normalize column names (case-insensitive)
+          const findVal = (keys: string[]) => {
+            const key = Object.keys(row).find(k => {
+              const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return keys.some(s => {
+                const normalizedS = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return normalizedK === normalizedS || normalizedK.includes(normalizedS);
+              });
+            });
+            return key ? row[key] : null;
+          };
+
+          const itemName = findVal(['Item', 'ItemName', 'Name', 'Product', 'Description']);
+          if (!itemName) {
+            skipCount++;
+            continue;
+          }
+
+          const buyingPrice = parseFloat(findVal(['BuyingPrice', 'Cost', 'CostPrice', 'Buying']) || '0');
+          const sellingPrice = parseFloat(findVal(['Price', 'SellingPrice', 'RetailPrice', 'Selling']) || '0');
+          const customerName = findVal(['CustomerName', 'Customer']);
+          const buybackDateVal = findVal(['Buyback', 'BuybackDate', 'DueDate', 'Date']);
+          
+          let status = 'Available';
+          let customerId = null;
+
+          // Logic: If Customer Name exists and Buyback date exists -> status = Buyback
+          if (customerName && buybackDateVal) {
+            status = 'Buyback';
+            
+            // Find or Create Customer
+            const { data: existingCustomer } = await supabase.from('customers').select('id').ilike('full_name', customerName.toString()).maybeSingle();
+            
+            if (existingCustomer) {
+              customerId = existingCustomer.id;
+            } else {
+              const { data: newCustomer } = await supabase.from('customers').insert({ full_name: customerName.toString() }).select().single();
+              customerId = newCustomer?.id;
+            }
+          }
+
+          // Insert Inventory Item
+          const { data: invItem, error: invError } = await supabase.from('inventory').insert({
+            item_name: itemName.toString(),
+            description: itemName.toString().length > 50 ? itemName.toString() : (findVal(['Description', 'Notes']) || '').toString(),
+            cost_price: buyingPrice,
+            selling_price: sellingPrice || (buyingPrice > 0 ? buyingPrice * 1.5 : 0),
+            status: status,
+            customer_id: customerId,
+            date_acquired: format(new Date(), 'yyyy-MM-dd'),
+            category: findVal(['Category', 'Type']) || 'Other',
+            condition: findVal(['Condition', 'State']) || 'Good',
+            serial_number: (findVal(['SerialNumber', 'Serial', 'SN']) || '').toString(),
+            notes: 'Imported from Excel'
+          }).select().single();
+
+          if (invError) {
+            console.error('Error importing item:', invError);
+            skipCount++;
+            continue;
+          }
+
+          // If Buyback, create Loan record
+          if (status === 'Buyback' && invItem && customerId) {
+            let dueDate = buybackDateVal;
+            if (typeof buybackDateVal === 'number' && buybackDateVal > 10000) {
+              // Handle Excel date serial numbers
+              dueDate = new Date((buybackDateVal - 25569) * 86400 * 1000);
+            } else if (typeof buybackDateVal === 'string') {
+              dueDate = new Date(buybackDateVal);
+            }
+            
+            // Ensure valid date
+            const finalDueDate = (dueDate instanceof Date && !isNaN(dueDate.getTime())) ? dueDate : addMonths(new Date(), 1);
+
+            const { error: loanError } = await supabase.from('loans').insert({
+              customer_id: customerId,
+              inventory_id: invItem.id,
+              loan_amount: buyingPrice,
+              interest_rate: 10,
+              interest_period: '1 Month',
+              due_date: format(finalDueDate, 'yyyy-MM-dd'),
+              total_due: sellingPrice || (buyingPrice * 1.1),
+              status: 'Active',
+              notes: 'Imported from Excel'
+            });
+
+            if (loanError) console.error('Error creating loan record:', loanError);
+          }
+
+        }
+
+        if (importedCount === 0 && data.length > 0) {
+          const headers = Object.keys(data[0]).join(', ');
+          alert(`Import Failed!\nWe couldn't find an "Item" or "Name" column.\n\nDetected columns: ${headers}\n\nPlease ensure your Excel sheet has columns named "Item" and "Buying Price".`);
+        } else {
+          alert(`Import Complete!\nSuccessfully imported: ${importedCount}\nSkipped: ${skipCount}`);
+        }
+        load();
+      } catch (err: any) {
+        console.error('Import Error:', err);
+        alert(`Error parsing Excel file: ${err.message}`);
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  async function handleExportExcel() {
+    try {
+      const exportData = items.map(i => ({
+        'Item Name': i.item_name,
+        'Description': i.description || '',
+        'Category': i.category || '',
+        'Condition': i.condition || '',
+        'Cost Price (GH₵)': i.cost_price,
+        'Selling Price (GH₵)': i.selling_price,
+        'Status': i.status,
+        'Date Acquired': i.date_acquired ? format(new Date(i.date_acquired), 'yyyy-MM-dd') : '',
+        'Serial Number': i.serial_number || '',
+        'Notes': i.notes || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+      XLSX.writeFile(wb, `Sterling_Inventory_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    } catch (err) {
+      console.error('Export Error:', err);
+      alert('Failed to export Excel file');
+    }
+  }
+
+  async function handleExportPDF() {
+    try {
+      const doc = new jsPDF('l', 'mm', 'a4'); // landscape
+      
+      // Add Title
+      doc.setFontSize(20);
+      doc.text('Sterling Pawnshop - Inventory Report', 14, 22);
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`, 14, 30);
+
+      const tableData = items.map(i => [
+        i.item_name,
+        i.category || '-',
+        i.condition || '-',
+        `GH₵ ${i.cost_price.toFixed(2)}`,
+        `GH₵ ${i.selling_price.toFixed(2)}`,
+        i.status,
+        i.date_acquired ? format(new Date(i.date_acquired), 'dd/MM/yy') : '-'
+      ]);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['Item', 'Category', 'Condition', 'Cost', 'Price', 'Status', 'Date']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [192, 21, 42] }, // Sterling Red
+      });
+
+      doc.save(`Sterling_Inventory_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (err) {
+      console.error('PDF Export Error:', err);
+      alert('Failed to export PDF file');
+    }
+  }
+
   const filtered = items.filter(i => {
     const matchSearch = i.item_name.toLowerCase().includes(search.toLowerCase()) ||
       (i.description || '').toLowerCase().includes(search.toLowerCase());
@@ -178,7 +377,38 @@ export default function InventoryPage() {
           <h1 className="text-3xl mb-4">Inventory</h1>
           <p className="text-muted">{items.length} items total</p>
         </div>
-        <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Add Item</button>
+        <div className="flex gap-10">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImport} 
+            accept=".xlsx, .xls" 
+            className="hidden" 
+            title="Import Excel"
+          />
+          <button 
+            className="btn-ghost" 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <FileUp size={16} /> {importing ? 'Importing...' : 'Import Excel'}
+          </button>
+          <button 
+            className="btn-ghost" 
+            onClick={handleExportExcel}
+            title="Download Excel"
+          >
+            <FileSpreadsheet size={16} /> Excel
+          </button>
+          <button 
+            className="btn-ghost" 
+            onClick={handleExportPDF}
+            title="Download PDF"
+          >
+            <FileDown size={16} /> PDF
+          </button>
+          <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Add Item</button>
+        </div>
       </div>
 
       {/* Filters */}
