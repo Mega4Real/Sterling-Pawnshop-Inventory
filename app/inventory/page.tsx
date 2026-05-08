@@ -307,8 +307,8 @@ export default function InventoryPage() {
         'Description': i.description || '',
         'Category': i.category || '',
         'Condition': i.condition || '',
-        'Cost Price (GH₵)': i.cost_price,
-        'Selling Price (GH₵)': i.selling_price,
+        'Cost Price (GHS)': i.cost_price,
+        'Selling Price (GHS)': i.selling_price,
         'Status': i.status,
         'Date Acquired': i.date_acquired ? format(new Date(i.date_acquired), 'yyyy-MM-dd') : '',
         'Serial Number': i.serial_number || '',
@@ -339,8 +339,8 @@ export default function InventoryPage() {
         i.item_name,
         i.category || '-',
         i.condition || '-',
-        `GH₵ ${i.cost_price.toFixed(2)}`,
-        `GH₵ ${i.selling_price.toFixed(2)}`,
+        `GHS ${i.cost_price.toFixed(2)}`,
+        `GHS ${i.selling_price.toFixed(2)}`,
         i.status,
         i.date_acquired ? format(new Date(i.date_acquired), 'dd/MM/yy') : '-'
       ]);
