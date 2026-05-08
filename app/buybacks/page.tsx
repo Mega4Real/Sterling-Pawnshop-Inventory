@@ -155,6 +155,20 @@ export default function BuybacksPage() {
     if (!deleteConfirmId) return;
     
     try {
+      // Find the loan first to get the inventory_id
+      const { data: loan } = await supabase.from('loans').select('inventory_id').eq('id', deleteConfirmId).single();
+      
+      if (loan?.inventory_id) {
+        // Deleting the inventory item will also delete the loan (if cascade is set)
+        // or we delete both for absolute certainty and "vice versa" behavior
+        const { error: invError } = await supabase.from('inventory').delete().eq('id', loan.inventory_id);
+        if (invError) {
+          alert(`Error deleting associated inventory item: ${invError.message}`);
+          return;
+        }
+      }
+      
+      // Delete the loan itself (redundant if inventory delete cascades, but safe)
       const { error } = await supabase.from('loans').delete().eq('id', deleteConfirmId);
       if (error) {
         alert(`Error deleting buyback: ${error.message}`);

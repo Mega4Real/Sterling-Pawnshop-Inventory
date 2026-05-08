@@ -78,6 +78,9 @@ export default function InventoryPage() {
     if (!deleteConfirmId) return;
     
     try {
+      // Delete associated loans first
+      await supabase.from('loans').delete().eq('inventory_id', deleteConfirmId);
+      
       const { error } = await supabase.from('inventory').delete().eq('id', deleteConfirmId);
       if (error) {
         alert(`Error deleting item: ${error.message}`);
