@@ -44,3 +44,39 @@ export async function sendBuybackReminderAction(loanId: string) {
     return { success: false, message: 'Failed to process reminder request.' };
   }
 }
+
+/**
+ * Server action to send a forfeiture notice for overdue buybacks
+ */
+export async function sendBuybackForfeitureAction(loanId: string) {
+  try {
+    const { data: loan, error } = await supabase
+      .from('loans')
+      .select('*, customers(full_name, phone), inventory(item_name)')
+      .eq('id', loanId)
+      .single();
+
+    if (error || !loan) {
+      return { success: false, message: 'Could not find buyback details.' };
+    }
+
+    const customer = loan.customers as any;
+    const inventory = loan.inventory as any;
+
+    if (!customer?.phone) {
+      return { success: false, message: 'Customer phone number is missing.' };
+    }
+
+    const customerName = customer.full_name;
+    const itemName = inventory?.item_name || 'your item';
+    const totalDue = loan.total_due.toFixed(2);
+
+    const message = `Hello ${customerName}, this is a notice from Sterling Pawnshop. Your buyback for ${itemName} is now overdue. As per our agreement, the item has been forfeited and is subject to sale. Total amount that was due: GH₵ ${totalDue}. Thank you.`;
+
+    const result = await sendSMS(customer.phone, message);
+    return result;
+  } catch (err) {
+    console.error('Action Error:', err);
+    return { success: false, message: 'Failed to process forfeiture notice.' };
+  }
+}

@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { TrendingUp, Package, Handshake, Users, AlertTriangle, DollarSign } from 'lucide-react';
 import { format, isPast, isToday, addDays } from 'date-fns';
 import Link from 'next/link';
+import { TrendingUp, Package, Handshake, Users, AlertTriangle, DollarSign, MessageSquare, Loader2, Check } from 'lucide-react';
+import { sendBuybackReminderAction, sendBuybackForfeitureAction } from '@/app/buybacks/sms-actions';
+import { useToast } from '@/components/Toast';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -15,6 +17,9 @@ export default function Dashboard() {
   const [overdueList, setOverdueList] = useState<any[]>([]);
   const [dueSoon, setDueSoon] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const { showToast } = useToast();
 
   useEffect(() => {
     async function load() {
@@ -54,6 +59,25 @@ export default function Dashboard() {
     load();
   }, []);
 
+  const handleSendMessage = async (loanId: string, type: 'reminder' | 'forfeiture') => {
+    setSendingId(loanId);
+    try {
+      const action = type === 'reminder' ? sendBuybackReminderAction : sendBuybackForfeitureAction;
+      const result = await action(loanId);
+
+      if (result.success) {
+        showToast('success', 'Message Sent', `SMS ${type} notice has been sent successfully.`);
+        setSentIds(prev => new Set(prev).add(loanId));
+      } else {
+        showToast('error', 'Send Failed', result.message || 'Could not send SMS.');
+      }
+    } catch (err) {
+      showToast('error', 'Error', 'An unexpected error occurred.');
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   const fmt = (n: number) => `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2 })}`;
 
   if (loading) return (
@@ -92,20 +116,43 @@ export default function Dashboard() {
           {overdueList.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No overdue buybacks 🎉</p>
           ) : overdueList.map(l => (
-            <Link key={l.id} href="/buybacks" style={{ textDecoration: 'none' }}>
-              <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ color: 'var(--text)', fontSize: 13 }}>{l.customers?.full_name}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{l.customers?.phone}</div>
+            <div key={l.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <Link href="/buybacks" style={{ textDecoration: 'none', flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 500 }}>{l.customers?.full_name}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{l.customers?.phone}</div>
+                    </div>
+                    <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>GH₵ {l.total_due?.toFixed(2)}</span>
                   </div>
-                  <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>GH₵ {l.total_due?.toFixed(2)}</span>
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
-                  {l.inventory?.item_name} · Due {format(new Date(l.due_date), 'dd MMM')}
-                </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                    {l.inventory?.item_name} · Due {format(new Date(l.due_date), 'dd MMM')}
+                  </div>
+                </Link>
+                <button
+                  onClick={() => handleSendMessage(l.id, 'forfeiture')}
+                  disabled={sendingId === l.id}
+                  className="btn-ghost"
+                  style={{ 
+                    padding: '6px', 
+                    minWidth: 'auto', 
+                    border: 'none', 
+                    background: sentIds.has(l.id) ? 'rgba(22, 163, 74, 0.1)' : 'var(--red-tint)', 
+                    color: sentIds.has(l.id) ? 'var(--success)' : 'var(--red)' 
+                  }}
+                  title={sentIds.has(l.id) ? "Notice Sent" : "Send Forfeiture Notice"}
+                >
+                  {sendingId === l.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : sentIds.has(l.id) ? (
+                    <Check size={14} />
+                  ) : (
+                    <MessageSquare size={14} />
+                  )}
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
 
@@ -118,20 +165,43 @@ export default function Dashboard() {
           {dueSoon.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Nothing due soon</p>
           ) : dueSoon.map(l => (
-            <Link key={l.id} href="/buybacks" style={{ textDecoration: 'none' }}>
-              <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ color: 'var(--text)', fontSize: 13 }}>{l.customers?.full_name}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{l.customers?.phone}</div>
+            <div key={l.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <Link href="/buybacks" style={{ textDecoration: 'none', flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 500 }}>{l.customers?.full_name}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{l.customers?.phone}</div>
+                    </div>
+                    <span style={{ color: 'var(--warning)', fontSize: 12, fontWeight: 600 }}>GH₵ {l.total_due?.toFixed(2)}</span>
                   </div>
-                  <span style={{ color: 'var(--warning)', fontSize: 12, fontWeight: 600 }}>GH₵ {l.total_due?.toFixed(2)}</span>
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
-                  {l.inventory?.item_name} · Due {format(new Date(l.due_date), 'dd MMM')}
-                </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                    {l.inventory?.item_name} · Due {format(new Date(l.due_date), 'dd MMM')}
+                  </div>
+                </Link>
+                <button
+                  onClick={() => handleSendMessage(l.id, 'reminder')}
+                  disabled={sendingId === l.id}
+                  className="btn-ghost"
+                  style={{ 
+                    padding: '6px', 
+                    minWidth: 'auto', 
+                    border: 'none', 
+                    background: sentIds.has(l.id) ? 'rgba(22, 163, 74, 0.1)' : 'rgba(217, 119, 6, 0.1)', 
+                    color: sentIds.has(l.id) ? 'var(--success)' : 'var(--warning)' 
+                  }}
+                  title={sentIds.has(l.id) ? "Reminder Sent" : "Send Reminder SMS"}
+                >
+                  {sendingId === l.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : sentIds.has(l.id) ? (
+                    <Check size={14} />
+                  ) : (
+                    <MessageSquare size={14} />
+                  )}
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </div>

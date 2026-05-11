@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
-import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2, MessageSquare } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2, MessageSquare, Check, Loader2 } from 'lucide-react';
 import { format, isPast, isToday, differenceInDays, addDays } from 'date-fns';
-import { sendBuybackReminderAction } from './sms-actions';
+import { sendBuybackReminderAction, sendBuybackForfeitureAction } from './sms-actions';
 import { useToast } from '@/components/Toast';
 
 const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
@@ -20,6 +20,7 @@ export default function BuybacksPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingSmsId, setSendingSmsId] = useState<string | null>(null);
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState(defaultForm());
   const { showToast } = useToast();
 
@@ -217,15 +218,17 @@ export default function BuybacksPage() {
     load();
   }
 
-  async function sendReminder(buybackId: string) {
+  async function handleSendSms(buybackId: string, type: 'reminder' | 'forfeiture') {
     setSendingSmsId(buybackId);
-    const res = await sendBuybackReminderAction(buybackId);
+    const action = type === 'reminder' ? sendBuybackReminderAction : sendBuybackForfeitureAction;
+    const res = await action(buybackId);
     setSendingSmsId(null);
     
     if (res.success) {
-      showToast('success', 'SMS Sent', 'Reminder message has been sent to the customer.');
+      showToast('success', 'SMS Sent', `${type === 'reminder' ? 'Reminder' : 'Forfeiture'} message has been sent to the customer.`);
+      setSentIds(prev => new Set(prev).add(buybackId));
     } else {
-      showToast('error', 'SMS Failed', res.message || 'Could not send reminder.');
+      showToast('error', 'SMS Failed', res.message || `Could not send ${type}.`);
     }
   }
 
@@ -315,12 +318,26 @@ export default function BuybacksPage() {
                           </>
                         )}
                         <button 
-                          className={`btn-ghost p-6 text-sm ${sendingSmsId === buyback.id ? 'opacity-50 pointer-events-none' : ''}`} 
-                          onClick={() => sendReminder(buyback.id)} 
-                          title="Send SMS Reminder"
+                          className={`btn-ghost p-6 text-sm`} 
+                          onClick={() => {
+                            const overdue = isPast(new Date(buyback.due_date)) && !isToday(new Date(buyback.due_date));
+                            handleSendSms(buyback.id, overdue ? 'forfeiture' : 'reminder');
+                          }} 
+                          style={{
+                            background: sentIds.has(buyback.id) ? 'rgba(22, 163, 74, 0.1)' : '',
+                            color: sentIds.has(buyback.id) ? 'var(--success)' : '',
+                            borderColor: sentIds.has(buyback.id) ? 'var(--success)' : ''
+                          }}
+                          title={sentIds.has(buyback.id) ? "SMS Sent" : "Send SMS Reminder"}
                           disabled={buyback.status !== 'Active' || sendingSmsId === buyback.id}
                         >
-                          <MessageSquare size={12} className={sendingSmsId === buyback.id ? 'animate-pulse' : ''} />
+                          {sendingSmsId === buyback.id ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : sentIds.has(buyback.id) ? (
+                            <Check size={12} />
+                          ) : (
+                            <MessageSquare size={12} />
+                          )}
                         </button>
                         <button className="btn-ghost p-6 text-sm" onClick={() => openEdit(buyback)} title="Edit Buyback">
                           <Edit2 size={12} />
