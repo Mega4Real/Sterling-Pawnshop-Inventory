@@ -24,7 +24,7 @@ export async function sendBuybackReminderAction(loanId: string) {
     const inventory = loan.inventory as any;
 
     if (!customer?.phone) {
-      return { success: false, message: 'Customer phone number is missing.' };
+      return { success: false, message: `No phone number on file for ${customer?.full_name || 'this customer'}. Please add one first.` };
     }
 
     // 2. Construct the message
@@ -64,7 +64,7 @@ export async function sendBuybackForfeitureAction(loanId: string) {
     const inventory = loan.inventory as any;
 
     if (!customer?.phone) {
-      return { success: false, message: 'Customer phone number is missing.' };
+      return { success: false, message: `No phone number on file for ${customer?.full_name || 'this customer'}. Please add one first.` };
     }
 
     const customerName = customer.full_name;
