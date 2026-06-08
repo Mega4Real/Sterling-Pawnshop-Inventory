@@ -3,11 +3,44 @@
 import { supabase } from '@/lib/supabase';
 import { sendSMS } from '@/lib/sms';
 import { format } from 'date-fns';
+import { smsPerLoanLimiter, smsGlobalLimiter } from '@/lib/rate-limit';
 
 /**
- * Server action to send a reminder SMS to a customer for their buyback
+ * Checks SMS rate limits before allowing a send.
+ * Enforces both per-loan and global limits to prevent cost abuse.
+ *
+ * @param loanId - The loan ID being messaged
+ * @returns Error message if rate-limited, or null if allowed
+ */
+function checkSmsRateLimit(loanId: string): string | null {
+  // Check per-loan limit (3 per 10 minutes)
+  const perLoan = smsPerLoanLimiter.check(loanId);
+  if (!perLoan.allowed) {
+    const retryMinutes = Math.ceil(perLoan.retryAfterMs / 60000);
+    return `Too many messages for this buyback. Please wait ${retryMinutes} minute${retryMinutes !== 1 ? 's' : ''} before sending again.`;
+  }
+
+  // Check global limit (15 per hour)
+  const global = smsGlobalLimiter.check('global');
+  if (!global.allowed) {
+    const retryMinutes = Math.ceil(global.retryAfterMs / 60000);
+    return `SMS limit reached (${retryMinutes} min${retryMinutes !== 1 ? 's' : ''} until reset). You have sent too many messages this hour.`;
+  }
+
+  return null;
+}
+
+/**
+ * Server action to send a reminder SMS to a customer for their buyback.
+ * Rate-limited: 3 per loan per 10min, 15 total per hour.
  */
 export async function sendBuybackReminderAction(loanId: string) {
+  // ── Rate limit check ──
+  const limitError = checkSmsRateLimit(loanId);
+  if (limitError) {
+    return { success: false, message: limitError };
+  }
+
   try {
     // 1. Fetch loan and customer details
     const { data: loan, error } = await supabase
@@ -46,9 +79,16 @@ export async function sendBuybackReminderAction(loanId: string) {
 }
 
 /**
- * Server action to send a forfeiture notice for overdue buybacks
+ * Server action to send a forfeiture notice for overdue buybacks.
+ * Rate-limited: 3 per loan per 10min, 15 total per hour.
  */
 export async function sendBuybackForfeitureAction(loanId: string) {
+  // ── Rate limit check ──
+  const limitError = checkSmsRateLimit(loanId);
+  if (limitError) {
+    return { success: false, message: limitError };
+  }
+
   try {
     const { data: loan, error } = await supabase
       .from('loans')

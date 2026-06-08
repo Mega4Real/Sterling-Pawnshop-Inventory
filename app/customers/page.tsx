@@ -1,19 +1,41 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase, Customer } from '@/lib/supabase';
-import { Plus, Search, X, CheckCircle, Edit2, User, Trash2 } from 'lucide-react';
+import { Plus, Search, X, CheckCircle, Edit2, User, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useCachedData, useMutation, invalidateCache } from '@/lib/data-cache';
+
+const fetchCustomers = async () => {
+  const { data, error } = await supabase.from('customers').select('*').order('full_name');
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchInventory = async () => {
+  const { data, error } = await supabase.from('inventory').select('*, customers(full_name)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchBuybacks = async () => {
+  const { data, error } = await supabase.from('loans')
+    .select('*, customers(full_name, phone), inventory(item_name, category)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
 
 const ID_TYPES = ['Ghana Card', 'Passport', 'Voter ID', 'Driver License', 'Other'];
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const { data: customers = [], isLoading: loading, refetch: refetchCustomers } = useCachedData('customers', fetchCustomers);
+  const { data: inventory = [], refetch: refetchInventory } = useCachedData('inventory', fetchInventory);
+  const { data: buybacks = [], refetch: refetchBuybacks } = useCachedData('buybacks', fetchBuybacks);
+
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Customer | null>(null);
-  const [customerStats, setCustomerStats] = useState<Record<string, any>>({});
   const [form, setForm] = useState(defaultForm());
 
   function defaultForm() {
@@ -21,26 +43,24 @@ export default function CustomersPage() {
   }
 
   async function load() {
-    const { data } = await supabase.from('customers').select('*').order('full_name');
-    setCustomers(data || []);
-    setLoading(false);
+    await Promise.all([refetchCustomers(), refetchInventory(), refetchBuybacks()]);
   }
 
-  useEffect(() => { load(); }, []);
-
-  async function loadStats(customer: Customer) {
+  function loadStats(customer: Customer) {
     setSelected(customer);
-    const [inv, buybacks] = await Promise.all([
-      supabase.from('inventory').select('*').eq('customer_id', customer.id),
-      supabase.from('loans').select('*').eq('customer_id', customer.id),
-    ]);
-    setCustomerStats({
-      items: (inv.data || []).length,
-      activeBuybacks: (buybacks.data || []).filter(l => l.status === 'Active').length,
-      totalBuybacks: (buybacks.data || []).length,
-      buybacks: buybacks.data || [],
-    });
   }
+
+  const customerStats = (() => {
+    if (!selected) return { items: 0, activeBuybacks: 0, totalBuybacks: 0, buybacks: [] };
+    const itemsList = inventory.filter(i => i.customer_id === selected.id);
+    const buybacksList = buybacks.filter(b => b.customer_id === selected.id);
+    return {
+      items: itemsList.length,
+      activeBuybacks: buybacksList.filter(l => l.status === 'Active').length,
+      totalBuybacks: buybacksList.length,
+      buybacks: buybacksList,
+    };
+  })();
 
   function openAdd() { setForm(defaultForm()); setEditing(null); setShowModal(true); }
   function openEdit(c: Customer) {
@@ -55,7 +75,10 @@ export default function CustomersPage() {
     if (error) {
       alert(`Error deleting customer: ${error.message}`);
     } else {
-      load();
+      invalidateCache('customers');
+      invalidateCache('inventory');
+      invalidateCache('buybacks');
+      await load();
       if (selected?.id === id) setSelected(null);
     }
   }
@@ -75,13 +98,20 @@ export default function CustomersPage() {
         return;
       }
 
+      invalidateCache('customers');
+      invalidateCache('inventory');
+      invalidateCache('buybacks');
+
       setShowModal(false);
-      load();
+      await load();
     } catch (err: any) {
       console.error('Unexpected Error:', err);
       alert(`An unexpected error occurred: ${err.message}`);
     }
   }
+
+  const { execute: executeRemove, loading: removeLoading } = useMutation(remove);
+  const { execute: executeSave, loading: saveLoading } = useMutation(save);
 
   const filtered = customers.filter(c =>
     c.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -142,8 +172,8 @@ export default function CustomersPage() {
                           <button className="btn-ghost p-6 text-sm" onClick={e => { e.stopPropagation(); openEdit(c); }}>
                             <Edit2 size={12} /> Edit
                           </button>
-                          <button className="btn-ghost p-6 text-sm text-danger" onClick={e => { e.stopPropagation(); remove(c.id); }}>
-                            <Trash2 size={12} />
+                          <button className="btn-ghost p-6 text-sm text-danger" onClick={e => { e.stopPropagation(); executeRemove(c.id); }} disabled={removeLoading}>
+                            {removeLoading ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
                           </button>
                         </div>
                       </td>
@@ -162,7 +192,9 @@ export default function CustomersPage() {
               <div className="modal-header">
                 <h3 className="text-lg">{selected.full_name}</h3>
                 <div className="flex gap-4">
-                  <button className="btn-ghost p-4" onClick={() => remove(selected.id)} title="Delete Customer"><Trash2 size={14} color="var(--danger)" /></button>
+                  <button className="btn-ghost p-4" onClick={() => executeRemove(selected.id)} disabled={removeLoading} title="Delete Customer">
+                    {removeLoading ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} color="var(--danger)" />}
+                  </button>
                   <button className="btn-ghost p-4" onClick={() => setSelected(null)} title="Close"><X size={14} /></button>
                 </div>
               </div>
@@ -239,9 +271,9 @@ export default function CustomersPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-gold" onClick={save} disabled={!form.full_name}>
-                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Add Customer'}
+              <button className="btn-ghost" onClick={() => setShowModal(false)} disabled={saveLoading}>Cancel</button>
+              <button className="btn-gold" onClick={() => executeSave()} disabled={saveLoading || !form.full_name}>
+                {saveLoading ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle size={15} />} {editing ? 'Save Changes' : 'Add Customer'}
               </button>
             </div>
           </div>

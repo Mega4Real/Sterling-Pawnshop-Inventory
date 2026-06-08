@@ -89,14 +89,85 @@ create trigger inventory_updated_at before update on inventory
 create trigger loans_updated_at before update on loans
   for each row execute function update_updated_at();
 
--- ROW LEVEL SECURITY (optional but recommended)
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- Only authenticated users can read/write data.
+-- The anon key is exposed in the browser, so "Allow all"
+-- policies would let anyone with the key access all data.
+-- ============================================================
 alter table customers enable row level security;
 alter table inventory enable row level security;
 alter table loans enable row level security;
 alter table loan_payments enable row level security;
 
--- Allow all operations with anon key (for single-user pawnshop app)
-create policy "Allow all" on customers for all using (true) with check (true);
-create policy "Allow all" on inventory for all using (true) with check (true);
-create policy "Allow all" on loans for all using (true) with check (true);
-create policy "Allow all" on loan_payments for all using (true) with check (true);
+-- Customers: authenticated users only
+create policy "Authenticated users can read customers"
+  on customers for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert customers"
+  on customers for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update customers"
+  on customers for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete customers"
+  on customers for delete
+  using (auth.role() = 'authenticated');
+
+-- Inventory: authenticated users only
+create policy "Authenticated users can read inventory"
+  on inventory for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert inventory"
+  on inventory for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update inventory"
+  on inventory for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete inventory"
+  on inventory for delete
+  using (auth.role() = 'authenticated');
+
+-- Loans: authenticated users only
+create policy "Authenticated users can read loans"
+  on loans for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert loans"
+  on loans for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update loans"
+  on loans for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete loans"
+  on loans for delete
+  using (auth.role() = 'authenticated');
+
+-- Loan payments: authenticated users only
+create policy "Authenticated users can read loan_payments"
+  on loan_payments for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert loan_payments"
+  on loan_payments for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update loan_payments"
+  on loan_payments for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete loan_payments"
+  on loan_payments for delete
+  using (auth.role() = 'authenticated');

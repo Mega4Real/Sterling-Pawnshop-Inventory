@@ -1,63 +1,70 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { format, isPast, isToday, addDays } from 'date-fns';
 import Link from 'next/link';
 import { TrendingUp, Package, Handshake, Users, AlertTriangle, DollarSign, MessageSquare, Loader2, Check } from 'lucide-react';
 import { sendBuybackReminderAction, sendBuybackForfeitureAction } from '@/app/buybacks/sms-actions';
 import { useToast } from '@/components/Toast';
+import { useCachedData } from '@/lib/data-cache';
+
+// Fetcher functions for cache mapping
+const fetchInventory = async () => {
+  const { data, error } = await supabase.from('inventory').select('*, customers(full_name)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchBuybacks = async () => {
+  const { data, error } = await supabase.from('loans')
+    .select('*, customers(full_name, phone), inventory(item_name, category)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchCustomers = async () => {
+  const { data, error } = await supabase.from('customers').select('*').order('full_name');
+  if (error) throw error;
+  return data || [];
+};
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalItems: 0, availableItems: 0, soldItems: 0,
-    activeBuybacks: 0, overdueBuybacks: 0, dueSoonBuybacks: 0,
-    totalCustomers: 0,
-    stockValue: 0, potentialRevenue: 0, totalBuybackValue: 0,
-  });
-  const [overdueList, setOverdueList] = useState<any[]>([]);
-  const [dueSoon, setDueSoon] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
 
-  useEffect(() => {
-    async function load() {
-      const [inv, loans, customers] = await Promise.all([
-        supabase.from('inventory').select('*'),
-        supabase.from('loans').select('*, customers(full_name, phone), inventory(item_name)').eq('status', 'Active'),
-        supabase.from('customers').select('id'),
-      ]);
+  // Load from client data cache
+  const { data: items = [], isLoading: isLoadingInv } = useCachedData('inventory', fetchInventory);
+  const { data: rawBuybackList = [], isLoading: isLoadingLoans } = useCachedData('buybacks', fetchBuybacks);
+  const { data: customers = [], isLoading: isLoadingCust } = useCachedData('customers', fetchCustomers);
 
-      const items = inv.data || [];
-      const buybackList = loans.data || [];
-      const now = new Date();
-      const soon = addDays(now, 3);
+  const loading = isLoadingInv || isLoadingLoans || isLoadingCust;
 
-      const overdue = buybackList.filter(l => isPast(new Date(l.due_date)) && !isToday(new Date(l.due_date)));
-      const nearDue = buybackList.filter(l => {
-        const d = new Date(l.due_date);
-        return !isPast(d) && d <= soon;
-      });
+  // Deriving stats directly from cached data
+  const now = new Date();
+  const soon = addDays(now, 3);
 
-      setStats({
-        totalItems: items.length,
-        availableItems: items.filter(i => i.status === 'Available').length,
-        soldItems: items.filter(i => i.status === 'Sold').length,
-        activeBuybacks: buybackList.length,
-        overdueBuybacks: overdue.length,
-        dueSoonBuybacks: nearDue.length,
-        totalCustomers: (customers.data || []).length,
-        stockValue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.cost_price, 0),
-        potentialRevenue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.selling_price, 0),
-        totalBuybackValue: buybackList.reduce((s, l) => s + l.total_due, 0),
-      });
-      setOverdueList(overdue);
-      setDueSoon(nearDue);
-      setLoading(false);
-    }
-    load();
-  }, []);
+  const buybackList = rawBuybackList.filter(l => l.status === 'Active');
+
+  const overdueList = buybackList.filter(l => isPast(new Date(l.due_date)) && !isToday(new Date(l.due_date)));
+  const dueSoon = buybackList.filter(l => {
+    const d = new Date(l.due_date);
+    return !isPast(d) && d <= soon;
+  });
+
+  const stats = {
+    totalItems: items.length,
+    availableItems: items.filter(i => i.status === 'Available').length,
+    soldItems: items.filter(i => i.status === 'Sold').length,
+    activeBuybacks: buybackList.length,
+    overdueBuybacks: overdueList.length,
+    dueSoonBuybacks: dueSoon.length,
+    totalCustomers: customers.length,
+    stockValue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.cost_price, 0),
+    potentialRevenue: items.filter(i => i.status === 'Available').reduce((s, i) => s + i.selling_price, 0),
+    totalBuybackValue: buybackList.reduce((s, l) => s + l.total_due, 0),
+  };
 
   const handleSendMessage = async (loanId: string, type: 'reminder' | 'forfeiture') => {
     setSendingId(loanId);

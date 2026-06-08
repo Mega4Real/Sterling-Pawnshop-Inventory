@@ -2,24 +2,51 @@
 import { useEffect, useState } from 'react';
 import { supabase, Buyback, Customer, InventoryItem } from '@/lib/supabase';
 import { Plus, Search, X, CheckCircle, AlertTriangle, Trash2, Edit2, MessageSquare, Check, Loader2 } from 'lucide-react';
-import { format, isPast, isToday, differenceInDays, addDays } from 'date-fns';
+import { format, isPast, isToday, differenceInDays, addDays, addMonths } from 'date-fns';
 import { sendBuybackReminderAction, sendBuybackForfeitureAction } from './sms-actions';
 import { useToast } from '@/components/Toast';
+import { useCachedData, useMutation, invalidateCache } from '@/lib/data-cache';
+
+const fetchBuybacks = async () => {
+  const { data, error } = await supabase.from('loans')
+    .select('*, customers(full_name, phone), inventory(item_name, category)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchCustomers = async () => {
+  const { data, error } = await supabase.from('customers').select('*').order('full_name');
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchInventory = async () => {
+  const { data, error } = await supabase.from('inventory').select('*, customers(full_name)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
 
 const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 const STATUSES = ['Active', 'Redeemed', 'Forfeited', 'Extended'];
 
 export default function BuybacksPage() {
-  const [buybacks, setBuybacks] = useState<Buyback[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const { data: buybacks = [], isLoading: isLoadingBuybacks, refetch: refetchBuybacks } = useCachedData('buybacks', fetchBuybacks);
+  const { data: customers = [], refetch: refetchCustomers } = useCachedData('customers', fetchCustomers);
+  const { data: rawInventory = [], isLoading: isLoadingInv, refetch: refetchInventory } = useCachedData('inventory', fetchInventory);
+
+  const loading = isLoadingBuybacks || isLoadingInv;
+
+  const inventory = rawInventory
+    .filter(i => ['Available', 'Buyback'].includes(i.status))
+    .sort((a, b) => a.item_name.localeCompare(b.item_name));
+
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Active');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Buyback | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [smsLoan, setSmsLoan] = useState<Buyback | null>(null);
-  const [loading, setLoading] = useState(true);
   const [sendingSmsId, setSendingSmsId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState(defaultForm());
@@ -49,18 +76,8 @@ export default function BuybacksPage() {
   }
 
   async function load() {
-    const { data } = await supabase.from('loans')
-      .select('*, customers(full_name, phone), inventory(item_name, category)')
-      .order('created_at', { ascending: false });
-    setBuybacks(data || []);
-    const { data: c } = await supabase.from('customers').select('*').order('full_name');
-    setCustomers(c || []);
-    const { data: inv } = await supabase.from('inventory').select('*').in('status', ['Available', 'Buyback']).order('item_name');
-    setInventory(inv || []);
-    setLoading(false);
+    await Promise.all([refetchBuybacks(), refetchCustomers(), refetchInventory()]);
   }
-
-  useEffect(() => { load(); }, []);
 
   function openAdd() {
     setForm(defaultForm());
@@ -93,6 +110,7 @@ export default function BuybacksPage() {
   async function save() {
     try {
       let finalCustomerId = form.customer_id;
+      let createdNewCustomer = false;
 
       // Create new customer if needed
       if (form.isNewCustomer) {
@@ -110,9 +128,8 @@ export default function BuybacksPage() {
           return;
         }
         finalCustomerId = newCust.id;
+        createdNewCustomer = true;
       }
-
-
 
       const payload = {
         customer_id: finalCustomerId,
@@ -149,10 +166,16 @@ export default function BuybacksPage() {
         }
       }
 
+      invalidateCache('buybacks');
+      invalidateCache('inventory');
+      if (createdNewCustomer) {
+        invalidateCache('customers');
+      }
+
       showToast('success', editing ? 'Updated' : 'Created', editing ? 'Buyback updated successfully.' : 'New buyback created successfully.');
 
       setShowModal(false);
-      load();
+      await load();
     } catch (err: any) {
       console.error('Unexpected Error:', err);
       alert(`An unexpected error occurred: ${err.message}`);
@@ -181,8 +204,10 @@ export default function BuybacksPage() {
       if (error) {
         showToast('error', 'Delete Failed', error.message);
       } else {
+        invalidateCache('buybacks');
+        invalidateCache('inventory');
         showToast('success', 'Deleted', 'Buyback record deleted successfully.');
-        load();
+        await load();
       }
     } catch (err) {
       console.error('Delete error:', err);
@@ -215,9 +240,16 @@ export default function BuybacksPage() {
         showToast('info', 'Note', `Buyback status updated, but failed to update inventory: ${invError.message}`);
       }
     }
+
+    invalidateCache('buybacks');
+    invalidateCache('inventory');
     showToast('success', 'Status Updated', `Buyback is now marked as ${newStatus}.`);
-    load();
+    await load();
   }
+
+  const { execute: executeSave, loading: saveLoading } = useMutation(save);
+  const { execute: executeRemove, loading: removeLoading } = useMutation(remove);
+  const { execute: executeUpdateStatus, loading: statusLoading } = useMutation(updateStatus);
 
   async function handleSendSms(buybackId: string, type: 'reminder' | 'forfeiture') {
     setSendingSmsId(buybackId);
@@ -314,8 +346,12 @@ export default function BuybacksPage() {
                       <div className="flex gap-6">
                         {buyback.status === 'Active' && (
                           <>
-                            <button className="btn-gold p-4 text-xs" onClick={() => updateStatus(buyback, 'Redeemed')}>Redeemed</button>
-                            <button className="btn-ghost p-4 text-xs text-danger border-danger" onClick={() => updateStatus(buyback, 'Forfeited')}>Forfeit</button>
+                            <button className="btn-gold p-4 text-xs" onClick={() => executeUpdateStatus(buyback, 'Redeemed')} disabled={statusLoading}>
+                              {statusLoading ? <Loader2 className="animate-spin" size={10} /> : 'Redeemed'}
+                            </button>
+                            <button className="btn-ghost p-4 text-xs text-danger border-danger" onClick={() => executeUpdateStatus(buyback, 'Forfeited')} disabled={statusLoading}>
+                              {statusLoading ? <Loader2 className="animate-spin" size={10} /> : 'Forfeit'}
+                            </button>
                           </>
                         )}
                         <button 
@@ -477,9 +513,9 @@ export default function BuybacksPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-gold" onClick={save} disabled={(!form.customer_id && !form.isNewCustomer) || !form.loan_amount || !form.due_date}>
-                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Create Buyback'}
+              <button className="btn-ghost" onClick={() => setShowModal(false)} disabled={saveLoading}>Cancel</button>
+              <button className="btn-gold" onClick={() => executeSave()} disabled={saveLoading || (!form.customer_id && !form.isNewCustomer) || !form.loan_amount || !form.due_date}>
+                {saveLoading ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle size={15} />} {editing ? 'Save Changes' : 'Create Buyback'}
               </button>
             </div>
           </div>
@@ -527,19 +563,19 @@ export default function BuybacksPage() {
       )}
 
       {deleteConfirmId && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirmId(null)}>
+        <div className="modal-overlay" onClick={() => !removeLoading && setDeleteConfirmId(null)}>
           <div className="modal max-w-400 text-center" onClick={e => e.stopPropagation()}>
             <div className="text-danger mb-16">
-              <Trash2 size={48} strokeWidth={1.5} />
+              {removeLoading ? <Loader2 className="animate-spin" size={48} style={{ margin: '0 auto' }} /> : <Trash2 size={48} strokeWidth={1.5} />}
             </div>
             <h2 className="text-2xl mb-12">Delete Buyback?</h2>
             <p className="text-muted mb-24">
               Are you sure you want to delete this buyback record? This action cannot be undone.
             </p>
             <div className="flex gap-12 justify-center">
-              <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
-              <button className="btn-gold flex-1 bg-danger text-white" onClick={remove}>
-                Delete
+              <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)} disabled={removeLoading}>Cancel</button>
+              <button className="btn-gold flex-1 bg-danger text-white" onClick={() => executeRemove()} disabled={removeLoading}>
+                {removeLoading ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

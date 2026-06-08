@@ -1,63 +1,69 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { supabase, InventoryItem, Customer } from '@/lib/supabase';
-import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText, FileUp, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, X, Edit2, CheckCircle, Trash2, UserPlus, FileText, FileUp, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { format, addMonths, addDays } from 'date-fns';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useCachedData, useMutation, invalidateCache } from '@/lib/data-cache';
+
+const fetchInventory = async () => {
+  const { data, error } = await supabase.from('inventory').select('*, customers(full_name)').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+const fetchCustomers = async () => {
+  const { data, error } = await supabase.from('customers').select('*').order('full_name');
+  if (error) throw error;
+  return data || [];
+};
 
 const CATEGORIES = ['Electronics', 'Television', 'Refrigerator', 'Laptop', 'Phone', 'Game', 'Car', 'Air Conditioner', 'Others'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 const STATUSES = ['Available', 'Sold', 'Buyback'];
 const PERIODS = ['1 Week', '2 Weeks', '3 Weeks', '1 Month', '2 Months'];
 
+function calculateDueDate(startDate: string, period: string) {
+  if (!startDate) return '';
+  const base = new Date(startDate);
+  let days = 30;
+  if (period === '1 Week') days = 7;
+  else if (period === '2 Weeks') days = 14;
+  else if (period === '3 Weeks') days = 21;
+  else if (period === '1 Month') days = 30;
+  else if (period === '2 Months') days = 60;
+  return format(addDays(base, days), 'yyyy-MM-dd');
+}
+
+function defaultForm() {
+  return {
+    item_name: '', description: '', category: 'Electronics', condition: 'Good',
+    cost_price: '', selling_price: '', status: 'Available',
+    customer_id: '', date_acquired: format(new Date(), 'yyyy-MM-dd'),
+    serial_number: '', notes: '',
+    isNewCustomer: false, newCustomerName: '', newCustomerPhone: '',
+    due_date: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
+    interest_rate: '10', interest_period: '1 Month'
+  };
+}
+
 export default function InventoryPage() {
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const { data: items = [], isLoading: loading, refetch: refetchItems } = useCachedData('inventory', fetchInventory);
+  const { data: customers = [], refetch: refetchCustomers } = useCachedData('customers', fetchCustomers);
+
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(defaultForm());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function calculateDueDate(startDate: string, period: string) {
-    if (!startDate) return '';
-    const base = new Date(startDate);
-    let days = 30;
-    if (period === '1 Week') days = 7;
-    else if (period === '2 Weeks') days = 14;
-    else if (period === '3 Weeks') days = 21;
-    else if (period === '1 Month') days = 30;
-    else if (period === '2 Months') days = 60;
-    return format(addDays(base, days), 'yyyy-MM-dd');
-  }
-
-  function defaultForm() {
-    return {
-      item_name: '', description: '', category: 'Electronics', condition: 'Good',
-      cost_price: '', selling_price: '', status: 'Available',
-      customer_id: '', date_acquired: format(new Date(), 'yyyy-MM-dd'),
-      serial_number: '', notes: '',
-      isNewCustomer: false, newCustomerName: '', newCustomerPhone: '',
-      due_date: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
-      interest_rate: '10', interest_period: '1 Month'
-    };
-  }
-
   async function load() {
-    const { data } = await supabase.from('inventory').select('*, customers(full_name)').order('created_at', { ascending: false });
-    setItems(data || []);
-    const { data: c } = await supabase.from('customers').select('*').order('full_name');
-    setCustomers(c || []);
-    setLoading(false);
+    await Promise.all([refetchItems(), refetchCustomers()]);
   }
-
-  useEffect(() => { load(); }, []);
 
   function openAdd() { setForm(defaultForm()); setEditing(null); setShowModal(true); }
   function openEdit(item: InventoryItem) {
@@ -85,7 +91,9 @@ export default function InventoryPage() {
       if (error) {
         alert(`Error deleting item: ${error.message}`);
       } else {
-        load();
+        invalidateCache('inventory');
+        invalidateCache('buybacks');
+        await load();
       }
     } catch (err) {
       console.error('Delete error:', err);
@@ -97,6 +105,7 @@ export default function InventoryPage() {
   async function save() {
     try {
       let finalCustomerId = form.customer_id;
+      let createdNewCustomer = false;
 
       // Handle New Customer
       if (form.status === 'Buyback' && form.isNewCustomer) {
@@ -114,6 +123,7 @@ export default function InventoryPage() {
           return;
         }
         finalCustomerId = nc.id;
+        createdNewCustomer = true;
       }
 
       const payload = {
@@ -173,146 +183,167 @@ export default function InventoryPage() {
         }
       }
 
+      invalidateCache('inventory');
+      invalidateCache('buybacks');
+      if (createdNewCustomer) {
+        invalidateCache('customers');
+      }
+
       setShowModal(false);
-      load();
+      await load();
     } catch (err: any) {
       console.error('Unexpected Error:', err);
       alert(`An unexpected error occurred: ${err.message}`);
     }
   }
 
+  const { execute: executeRemove, loading: removeLoading } = useMutation(remove);
+  const { execute: executeSave, loading: saveLoading } = useMutation(save);
+
+  const processImport = async (file: File) => {
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+          if (data.length === 0) {
+            alert('No data found in Excel sheet');
+            resolve();
+            return;
+          }
+
+          let importedCount = 0;
+          let skipCount = 0;
+
+          for (const row of data) {
+            // Normalize column names (case-insensitive)
+            const findVal = (keys: string[]) => {
+              const key = Object.keys(row).find(k => {
+                const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return keys.some(s => {
+                  const normalizedS = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  return normalizedK === normalizedS || normalizedK.includes(normalizedS);
+                });
+              });
+              return key ? row[key] : null;
+            };
+
+            const itemName = findVal(['Item', 'ItemName', 'Name', 'Product', 'Description']);
+            if (!itemName) {
+              skipCount++;
+              continue;
+            }
+
+            const buyingPrice = parseFloat(findVal(['BuyingPrice', 'Cost', 'CostPrice', 'Buying']) || '0');
+            const sellingPrice = parseFloat(findVal(['Price', 'SellingPrice', 'RetailPrice', 'Selling']) || '0');
+            const customerName = findVal(['CustomerName', 'Customer']);
+            const buybackDateVal = findVal(['Buyback', 'BuybackDate', 'DueDate', 'Date']);
+            
+            let status = 'Available';
+            let customerId = null;
+
+            // Logic: If Customer Name exists and Buyback date exists -> status = Buyback
+            if (customerName && buybackDateVal) {
+              status = 'Buyback';
+              
+              // Find or Create Customer
+              const { data: existingCustomer } = await supabase.from('customers').select('id').ilike('full_name', customerName.toString()).maybeSingle();
+              
+              if (existingCustomer) {
+                customerId = existingCustomer.id;
+              } else {
+                const { data: newCustomer } = await supabase.from('customers').insert({ full_name: customerName.toString() }).select().single();
+                customerId = newCustomer?.id;
+              }
+            }
+
+            // Insert Inventory Item
+            const { data: invItem, error: invError } = await supabase.from('inventory').insert({
+              item_name: itemName.toString(),
+              description: itemName.toString().length > 50 ? itemName.toString() : (findVal(['Description', 'Notes']) || '').toString(),
+              cost_price: buyingPrice,
+              selling_price: sellingPrice || (buyingPrice > 0 ? buyingPrice * 1.5 : 0),
+              status: status,
+              customer_id: customerId,
+              date_acquired: format(new Date(), 'yyyy-MM-dd'),
+              category: findVal(['Category', 'Type']) || 'Other',
+              condition: findVal(['Condition', 'State']) || 'Good',
+              serial_number: (findVal(['SerialNumber', 'Serial', 'SN']) || '').toString(),
+              notes: 'Imported from Excel'
+            }).select().single();
+
+            if (invError) {
+              console.error('Error importing item:', invError);
+              skipCount++;
+              continue;
+            }
+
+            importedCount++;
+
+            // If Buyback, create Loan record
+            if (status === 'Buyback' && invItem && customerId) {
+              let dueDate = buybackDateVal;
+              if (typeof buybackDateVal === 'number' && buybackDateVal > 10000) {
+                // Handle Excel date serial numbers
+                dueDate = new Date((buybackDateVal - 25569) * 86400 * 1000);
+              } else if (typeof buybackDateVal === 'string') {
+                dueDate = new Date(buybackDateVal);
+              }
+              
+              // Ensure valid date
+              const finalDueDate = (dueDate instanceof Date && !isNaN(dueDate.getTime())) ? dueDate : addMonths(new Date(), 1);
+
+              const { error: loanError } = await supabase.from('loans').insert({
+                customer_id: customerId,
+                inventory_id: invItem.id,
+                loan_amount: buyingPrice,
+                interest_rate: 10,
+                interest_period: '1 Month',
+                due_date: format(finalDueDate, 'yyyy-MM-dd'),
+                total_due: sellingPrice || (buyingPrice * 1.1),
+                status: 'Active',
+                notes: 'Imported from Excel'
+              });
+
+              if (loanError) console.error('Error creating loan record:', loanError);
+            }
+          }
+
+          if (importedCount === 0 && data.length > 0) {
+            const headers = Object.keys(data[0]).join(', ');
+            alert(`Import Failed!\nWe couldn't find an "Item" or "Name" column.\n\nDetected columns: ${headers}\n\nPlease ensure your Excel sheet has columns named "Item" and "Buying Price".`);
+          } else {
+            alert(`Import Complete!\nSuccessfully imported: ${importedCount}\nSkipped: ${skipCount}`);
+          }
+
+          invalidateCache('inventory');
+          invalidateCache('buybacks');
+          invalidateCache('customers');
+          await load();
+          resolve();
+        } catch (err: any) {
+          console.error('Import Error:', err);
+          alert(`Error parsing Excel file: ${err.message}`);
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsBinaryString(file);
+    });
+  };
+
+  const { execute: executeImport, loading: importing } = useMutation(processImport);
+
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setImporting(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws) as any[];
-
-        if (data.length === 0) {
-          alert('No data found in Excel sheet');
-          setImporting(false);
-          return;
-        }
-
-        let importedCount = 0;
-        let skipCount = 0;
-
-        for (const row of data) {
-          // Normalize column names (case-insensitive)
-          const findVal = (keys: string[]) => {
-            const key = Object.keys(row).find(k => {
-              const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return keys.some(s => {
-                const normalizedS = s.toLowerCase().replace(/[^a-z0-9]/g, '');
-                return normalizedK === normalizedS || normalizedK.includes(normalizedS);
-              });
-            });
-            return key ? row[key] : null;
-          };
-
-          const itemName = findVal(['Item', 'ItemName', 'Name', 'Product', 'Description']);
-          if (!itemName) {
-            skipCount++;
-            continue;
-          }
-
-          const buyingPrice = parseFloat(findVal(['BuyingPrice', 'Cost', 'CostPrice', 'Buying']) || '0');
-          const sellingPrice = parseFloat(findVal(['Price', 'SellingPrice', 'RetailPrice', 'Selling']) || '0');
-          const customerName = findVal(['CustomerName', 'Customer']);
-          const buybackDateVal = findVal(['Buyback', 'BuybackDate', 'DueDate', 'Date']);
-          
-          let status = 'Available';
-          let customerId = null;
-
-          // Logic: If Customer Name exists and Buyback date exists -> status = Buyback
-          if (customerName && buybackDateVal) {
-            status = 'Buyback';
-            
-            // Find or Create Customer
-            const { data: existingCustomer } = await supabase.from('customers').select('id').ilike('full_name', customerName.toString()).maybeSingle();
-            
-            if (existingCustomer) {
-              customerId = existingCustomer.id;
-            } else {
-              const { data: newCustomer } = await supabase.from('customers').insert({ full_name: customerName.toString() }).select().single();
-              customerId = newCustomer?.id;
-            }
-          }
-
-          // Insert Inventory Item
-          const { data: invItem, error: invError } = await supabase.from('inventory').insert({
-            item_name: itemName.toString(),
-            description: itemName.toString().length > 50 ? itemName.toString() : (findVal(['Description', 'Notes']) || '').toString(),
-            cost_price: buyingPrice,
-            selling_price: sellingPrice || (buyingPrice > 0 ? buyingPrice * 1.5 : 0),
-            status: status,
-            customer_id: customerId,
-            date_acquired: format(new Date(), 'yyyy-MM-dd'),
-            category: findVal(['Category', 'Type']) || 'Other',
-            condition: findVal(['Condition', 'State']) || 'Good',
-            serial_number: (findVal(['SerialNumber', 'Serial', 'SN']) || '').toString(),
-            notes: 'Imported from Excel'
-          }).select().single();
-
-          if (invError) {
-            console.error('Error importing item:', invError);
-            skipCount++;
-            continue;
-          }
-
-          // If Buyback, create Loan record
-          if (status === 'Buyback' && invItem && customerId) {
-            let dueDate = buybackDateVal;
-            if (typeof buybackDateVal === 'number' && buybackDateVal > 10000) {
-              // Handle Excel date serial numbers
-              dueDate = new Date((buybackDateVal - 25569) * 86400 * 1000);
-            } else if (typeof buybackDateVal === 'string') {
-              dueDate = new Date(buybackDateVal);
-            }
-            
-            // Ensure valid date
-            const finalDueDate = (dueDate instanceof Date && !isNaN(dueDate.getTime())) ? dueDate : addMonths(new Date(), 1);
-
-            const { error: loanError } = await supabase.from('loans').insert({
-              customer_id: customerId,
-              inventory_id: invItem.id,
-              loan_amount: buyingPrice,
-              interest_rate: 10,
-              interest_period: '1 Month',
-              due_date: format(finalDueDate, 'yyyy-MM-dd'),
-              total_due: sellingPrice || (buyingPrice * 1.1),
-              status: 'Active',
-              notes: 'Imported from Excel'
-            });
-
-            if (loanError) console.error('Error creating loan record:', loanError);
-          }
-
-        }
-
-        if (importedCount === 0 && data.length > 0) {
-          const headers = Object.keys(data[0]).join(', ');
-          alert(`Import Failed!\nWe couldn't find an "Item" or "Name" column.\n\nDetected columns: ${headers}\n\nPlease ensure your Excel sheet has columns named "Item" and "Buying Price".`);
-        } else {
-          alert(`Import Complete!\nSuccessfully imported: ${importedCount}\nSkipped: ${skipCount}`);
-        }
-        load();
-      } catch (err: any) {
-        console.error('Import Error:', err);
-        alert(`Error parsing Excel file: ${err.message}`);
-      } finally {
-        setImporting(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsBinaryString(file);
+    await executeImport(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function handleExportExcel() {
@@ -624,9 +655,9 @@ export default function InventoryPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-gold" onClick={save} disabled={!form.item_name || !form.cost_price || !form.selling_price}>
-                <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Add Item'}
+              <button className="btn-ghost" onClick={() => setShowModal(false)} disabled={saveLoading}>Cancel</button>
+              <button className="btn-gold" onClick={() => executeSave()} disabled={saveLoading || !form.item_name || !form.cost_price || !form.selling_price}>
+                {saveLoading ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle size={15} />} {editing ? 'Save Changes' : 'Add Item'}
               </button>
             </div>
           </div>
@@ -634,19 +665,19 @@ export default function InventoryPage() {
       )}
 
       {deleteConfirmId && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirmId(null)}>
+        <div className="modal-overlay" onClick={() => !removeLoading && setDeleteConfirmId(null)}>
           <div className="modal max-w-400 text-center" onClick={e => e.stopPropagation()}>
             <div className="text-danger mb-16">
-              <Trash2 size={48} strokeWidth={1.5} />
+              {removeLoading ? <Loader2 className="animate-spin" size={48} style={{ margin: '0 auto' }} /> : <Trash2 size={48} strokeWidth={1.5} />}
             </div>
             <h2 className="text-2xl mb-12">Delete Item?</h2>
             <p className="text-muted mb-24">
               Are you sure you want to delete this inventory item? This action cannot be undone and may affect associated buybacks.
             </p>
             <div className="flex gap-12 justify-center">
-              <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
-              <button className="btn-gold flex-1 bg-danger text-white" onClick={remove}>
-                Delete
+              <button className="btn-ghost flex-1" onClick={() => setDeleteConfirmId(null)} disabled={removeLoading}>Cancel</button>
+              <button className="btn-gold flex-1 bg-danger text-white" onClick={() => executeRemove()} disabled={removeLoading}>
+                {removeLoading ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
