@@ -18,6 +18,7 @@ export default function BuybacksPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Buyback | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [smsLoan, setSmsLoan] = useState<Buyback | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingSmsId, setSendingSmsId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
@@ -319,16 +320,13 @@ export default function BuybacksPage() {
                         )}
                         <button 
                           className={`btn-ghost p-6 text-sm`} 
-                          onClick={() => {
-                            const overdue = isPast(new Date(buyback.due_date)) && !isToday(new Date(buyback.due_date));
-                            handleSendSms(buyback.id, overdue ? 'forfeiture' : 'reminder');
-                          }} 
+                          onClick={() => setSmsLoan(buyback)} 
                           style={{
                             background: sentIds.has(buyback.id) ? 'rgba(22, 163, 74, 0.1)' : '',
                             color: sentIds.has(buyback.id) ? 'var(--success)' : '',
                             borderColor: sentIds.has(buyback.id) ? 'var(--success)' : ''
                           }}
-                          title={sentIds.has(buyback.id) ? "SMS Sent" : "Send SMS Reminder"}
+                          title="Send SMS Alert"
                           disabled={buyback.status !== 'Active' || sendingSmsId === buyback.id}
                         >
                           {sendingSmsId === buyback.id ? (
@@ -482,6 +480,46 @@ export default function BuybacksPage() {
               <button className="btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn-gold" onClick={save} disabled={(!form.customer_id && !form.isNewCustomer) || !form.loan_amount || !form.due_date}>
                 <CheckCircle size={15} /> {editing ? 'Save Changes' : 'Create Buyback'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {smsLoan && (
+        <div className="modal-overlay" onClick={() => setSmsLoan(null)}>
+          <div className="modal max-w-400 text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-gold mb-16 flex justify-center" style={{ color: 'var(--red)' }}>
+              <MessageSquare size={48} strokeWidth={1.5} />
+            </div>
+            <h2 className="text-2xl mb-12">Send SMS Alert</h2>
+            <p className="text-muted mb-24">
+              Select the message type to send to <strong>{(smsLoan.customers as any)?.full_name}</strong>.
+            </p>
+            <div className="flex flex-col gap-10">
+              <button 
+                className="btn-gold w-full justify-center" 
+                onClick={() => {
+                  handleSendSms(smsLoan.id, 'reminder');
+                  setSmsLoan(null);
+                }}
+              >
+                Send Friendly Reminder
+              </button>
+              <button 
+                className="btn-ghost w-full justify-center text-danger border-danger hover:bg-red-tint" 
+                onClick={() => {
+                  handleSendSms(smsLoan.id, 'forfeiture');
+                  setSmsLoan(null);
+                }}
+              >
+                Send Overdue Notice (Forfeiture)
+              </button>
+              <button 
+                className="btn-ghost w-full justify-center mt-10" 
+                onClick={() => setSmsLoan(null)}
+              >
+                Cancel
               </button>
             </div>
           </div>
