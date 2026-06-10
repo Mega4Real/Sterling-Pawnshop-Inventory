@@ -14,7 +14,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Handshake, Users, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, Handshake, Users, Menu, X, LogOut, MessageSquare } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createAuthClient } from '@/lib/supabase-auth';
 
@@ -24,6 +24,7 @@ const nav = [
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/buybacks', label: 'Buybacks', icon: Handshake },
   { href: '/customers', label: 'Customers', icon: Users },
+  { href: '/sms', label: 'SMS Portal', icon: MessageSquare },
 ];
 
 interface SidebarContentProps {

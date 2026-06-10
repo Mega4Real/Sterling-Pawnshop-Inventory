@@ -1,6 +1,18 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import AppShell from '@/components/AppShell';
+
+/**
+ * Viewport config — prevents iOS Safari from auto-zooming when a text input
+ * is focused (which happens when font-size < 16px). Setting maximum-scale=1
+ * disables that zoom without preventing the user from manually pinch-zooming.
+ */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: 'Sterling Pawnshop — Staff Portal',

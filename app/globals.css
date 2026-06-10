@@ -103,7 +103,8 @@ h1, h2, h3 {
 }
 .btn-ghost:hover { border-color: var(--gold-dim); color: var(--text); }
 
-/* Input */
+/* Input — font-size must be ≥ 16px to prevent iOS Safari from auto-zooming
+   when the field is focused. The visual change is negligible at this size. */
 .input {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -111,7 +112,7 @@ h1, h2, h3 {
   padding: 9px 12px;
   border-radius: 8px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 16px;
   width: 100%;
   outline: none;
   transition: border-color 0.15s;
