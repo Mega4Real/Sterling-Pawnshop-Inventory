@@ -15,6 +15,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Package, Handshake, Users, Menu, X, LogOut, MessageSquare } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 import { useState, useEffect } from 'react';
 import { createAuthClient } from '@/lib/supabase-auth';
 
@@ -95,6 +96,9 @@ function SidebarContent({
             {userEmail}
           </div>
         )}
+
+        {/* Push notification toggle — only rendered once (desktop) to avoid duplicate SW registrations */}
+        {instanceId === 'desktop' && <NotificationBell />}
 
         {/* Sign Out button — unique ID per instance avoids duplicate-ID warnings */}
         <button
