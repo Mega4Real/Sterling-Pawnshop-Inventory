@@ -97,8 +97,8 @@ function SidebarContent({
           </div>
         )}
 
-        {/* Push notification toggle — only rendered once (desktop) to avoid duplicate SW registrations */}
-        {instanceId === 'desktop' && <NotificationBell />}
+        {/* Push notification toggle */}
+        <NotificationBell />
 
         {/* Sign Out button — unique ID per instance avoids duplicate-ID warnings */}
         <button
