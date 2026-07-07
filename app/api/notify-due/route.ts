@@ -13,12 +13,9 @@
  *  3. Fetches all push_subscriptions from the database.
  *  4. Sends a Web Push notification to every subscribed device.
  *  5. Returns a JSON summary { sent, skipped, errors }.
- *
- * Security: The route checks for a CRON_SECRET header so only Vercel
- * (or an authorized caller) can trigger it, not random internet users.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { format, addDays, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
@@ -92,17 +89,7 @@ function buildPayload(loan: Loan, type: 'overdue' | 'due_today' | 'due_soon') {
   return { ...messages[type], url: '/buybacks' };
 }
 
-export async function GET(req: NextRequest) {
-  // ── Security: verify cron secret (skip check in dev) ──────────────────────
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authHeader = req.headers.get('authorization');
-    const isVercelCron = req.headers.get('x-vercel-cron') === '1';
-
-    if (authHeader !== `Bearer ${secret}` && !isVercelCron) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
+export async function GET() {
 
   try {
     const supabase = createAdminClient();
