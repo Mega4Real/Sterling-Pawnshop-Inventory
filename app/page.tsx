@@ -1,9 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { format, isPast, isToday, addDays } from 'date-fns';
 import Link from 'next/link';
-import { TrendingUp, Package, Handshake, Users, AlertTriangle, DollarSign, MessageSquare, Loader2, Check } from 'lucide-react';
+import { TrendingUp, Package, Handshake, Users, AlertTriangle, DollarSign, MessageSquare, Loader2, Check, Coins } from 'lucide-react';
 import { sendBuybackReminderAction, sendBuybackForfeitureAction } from '@/app/buybacks/sms-actions';
 import { useToast } from '@/components/Toast';
 import { useCachedData } from '@/lib/data-cache';
@@ -33,6 +33,36 @@ export default function Dashboard() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
+
+  // ── SMS credit balance ──────────────────────────────────────────────────
+  const [smsBalance, setSmsBalance] = useState<string | null>(null);
+  const [smsBalanceLoading, setSmsBalanceLoading] = useState(true);
+
+  useEffect(() => {
+    /** Fetch Arkesel balance on dashboard mount */
+    async function loadSmsBalance() {
+      try {
+        const res = await fetch('/api/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check-balance' }),
+        });
+        const result = await res.json();
+        if (res.ok && result.success && result.data) {
+          // balance field returned by Arkesel API
+          const bal = result.data?.balance ?? result.data?.Balance ?? result.data?.sms_balance ?? null;
+          setSmsBalance(bal !== null ? String(bal) : 'N/A');
+        } else {
+          setSmsBalance('N/A');
+        }
+      } catch {
+        setSmsBalance('N/A');
+      } finally {
+        setSmsBalanceLoading(false);
+      }
+    }
+    loadSmsBalance();
+  }, []);
 
   // Load from client data cache
   const { data: items = [], isLoading: isLoadingInv } = useCachedData('inventory', fetchInventory);
@@ -102,14 +132,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stat cards - 1 column on mobile, 2 on sm, 3 on md, 4 on lg */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+      {/* Stat cards - 2 columns on mobile, 3 on md, 4 on lg */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard label="Available Items" value={stats.availableItems} icon={<Package size={18} />} color="var(--gold)" />
         <StatCard label="Stock Cost" value={fmt(stats.stockValue)} icon={<DollarSign size={18} />} color="var(--gold)" small />
         <StatCard label="Potential Revenue" value={fmt(stats.potentialRevenue)} icon={<TrendingUp size={18} />} color="var(--success)" small />
         <StatCard label="Active Buybacks" value={stats.activeBuybacks} icon={<Handshake size={18} />} color="var(--info)" />
         <StatCard label="Buyback Value" value={fmt(stats.totalBuybackValue)} icon={<DollarSign size={18} />} color="var(--info)" small />
         <StatCard label="Customers" value={stats.totalCustomers} icon={<Users size={18} />} color="var(--text-muted)" />
+        <StatCard
+          label="SMS Credits"
+          value={smsBalanceLoading ? '…' : (smsBalance ?? 'N/A')}
+          icon={<Coins size={18} />}
+          color="var(--purple, #a855f7)"
+          loading={smsBalanceLoading}
+        />
       </div>
 
       {/* Alerts */}
@@ -216,14 +253,14 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ label, value, icon, color, small }: any) {
+function StatCard({ label, value, icon, color, small, loading }: any) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
         <span style={{ color }}>{icon}</span>
       </div>
-      <div style={{ fontSize: small ? 14 : 20, fontWeight: 700, fontFamily: small ? 'var(--font-body)' : 'var(--font-display)', color: 'var(--text)' }}>
+      <div style={{ fontSize: small ? 14 : 20, fontWeight: 700, fontFamily: small ? 'var(--font-body)' : 'var(--font-display)', color: loading ? 'var(--text-muted)' : 'var(--text)' }}>
         {value}
       </div>
     </div>
