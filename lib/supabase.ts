@@ -53,3 +53,44 @@ export type Buyback = {
   customers?: Customer;
   inventory?: InventoryItem;
 };
+
+export type Employee = {
+  id: string;
+  employee_code: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role_title: string;
+  employment_type: string;
+  basic_salary: number;
+  allowances: number;
+  ssnit_number: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  status: string;
+  hire_date: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Payroll = {
+  id: string;
+  employee_id: string;
+  pay_period_month: number;
+  pay_period_year: number;
+  basic_salary: number;
+  allowances: number;
+  overtime_pay: number;
+  bonuses: number;
+  gross_salary: number;
+  net_salary: number;
+  payment_date: string;
+  payment_status: string;
+  payment_method: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  employees?: Employee;
+};
+

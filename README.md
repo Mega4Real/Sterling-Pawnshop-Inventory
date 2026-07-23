@@ -6,6 +6,7 @@ A full-stack pawnshop manager built with Next.js 14, Supabase, and deployed on V
 - 📦 **Inventory** — Track items with cost price, selling price, profit margin
 - 🤝 **Buybacks** — Manage buybacks with collateral, interest, due dates, overdue alerts
 - 👥 **Customers** — Customer records with ID verification fields
+- 💵 **Payroll** — Employee salary management, monthly payslip generation, PDF/Excel export, & annual tax statements
 - 📊 **Dashboard** — Live stats, overdue alerts, revenue overview
 - 📲 **SMS Portal** — Send SMS notifications via Arkesel
 - 🔔 **Push Notifications** — Receive iPhone alerts for overdue and due-in-3-days loans
@@ -24,6 +25,8 @@ A full-stack pawnshop manager built with Next.js 14, Supabase, and deployed on V
 2. Go to **SQL Editor**
 3. Paste the entire contents of `schema.sql` and click **Run**
 4. Then paste `migrate-push-notifications.sql` and click **Run**
+5. Then paste `migrate-payroll.sql` to set up the **Payroll & Employees** tables and click **Run**
+
 
 ### Step 2 — Environment Variables
 Create a `.env.local` file in the root with:

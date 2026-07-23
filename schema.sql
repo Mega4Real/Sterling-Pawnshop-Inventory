@@ -171,3 +171,69 @@ create policy "Authenticated users can update loan_payments"
 create policy "Authenticated users can delete loan_payments"
   on loan_payments for delete
   using (auth.role() = 'authenticated');
+
+-- EMPLOYEES TABLE
+create table employees (
+  id uuid primary key default uuid_generate_v4(),
+  employee_code text unique not null,
+  full_name text not null,
+  email text,
+  phone text,
+  role_title text default 'Staff',
+  employment_type text default 'Full-Time',
+  basic_salary numeric(10,2) not null default 0.00,
+  allowances numeric(10,2) not null default 0.00,
+  ssnit_number text,
+  bank_name text,
+  account_number text,
+  status text default 'Active',
+  hire_date date default current_date,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- PAYROLLS (PAYSLIPS) TABLE
+create table payrolls (
+  id uuid primary key default uuid_generate_v4(),
+  employee_id uuid references employees(id) on delete cascade not null,
+  pay_period_month integer not null check (pay_period_month >= 1 and pay_period_month <= 12),
+  pay_period_year integer not null check (pay_period_year >= 2000),
+  basic_salary numeric(10,2) not null default 0.00,
+  allowances numeric(10,2) not null default 0.00,
+  overtime_pay numeric(10,2) not null default 0.00,
+  bonuses numeric(10,2) not null default 0.00,
+  ssnit_deduction numeric(10,2) not null default 0.00,
+  tax_deduction numeric(10,2) not null default 0.00,
+  other_deductions numeric(10,2) not null default 0.00,
+  gross_salary numeric(10,2) not null default 0.00,
+  total_deductions numeric(10,2) not null default 0.00,
+  net_salary numeric(10,2) not null default 0.00,
+  payment_date date default current_date,
+  payment_status text default 'Paid',
+  payment_method text default 'Bank Transfer',
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(employee_id, pay_period_month, pay_period_year)
+);
+
+create trigger employees_updated_at before update on employees
+  for each row execute function update_updated_at();
+
+create trigger payrolls_updated_at before update on payrolls
+  for each row execute function update_updated_at();
+
+alter table employees enable row level security;
+alter table payrolls enable row level security;
+
+create policy "Authenticated users can read employees" on employees for select using (auth.role() = 'authenticated');
+create policy "Authenticated users can insert employees" on employees for insert with check (auth.role() = 'authenticated');
+create policy "Authenticated users can update employees" on employees for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "Authenticated users can delete employees" on employees for delete using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can read payrolls" on payrolls for select using (auth.role() = 'authenticated');
+create policy "Authenticated users can insert payrolls" on payrolls for insert with check (auth.role() = 'authenticated');
+create policy "Authenticated users can update payrolls" on payrolls for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "Authenticated users can delete payrolls" on payrolls for delete using (auth.role() = 'authenticated');
+

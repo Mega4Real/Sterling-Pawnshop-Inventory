@@ -95,15 +95,15 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="page-header" style={{ paddingLeft: '48px' }}>
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">Dashboard</h1>
-          <p className="text-muted">{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
+          <h1 className="text-2xl sm:text-3xl mb-1 sm:mb-4">Dashboard</h1>
+          <p className="text-muted text-xs sm:text-sm">{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
         </div>
       </div>
 
-      {/* Stat cards - 2 columns on mobile, more on desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-16 mb-28">
+      {/* Stat cards - 1 column on mobile, 2 on sm, 3 on md, 4 on lg */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard label="Available Items" value={stats.availableItems} icon={<Package size={18} />} color="var(--gold)" />
         <StatCard label="Stock Cost" value={fmt(stats.stockValue)} icon={<DollarSign size={18} />} color="var(--gold)" small />
         <StatCard label="Potential Revenue" value={fmt(stats.potentialRevenue)} icon={<TrendingUp size={18} />} color="var(--success)" small />

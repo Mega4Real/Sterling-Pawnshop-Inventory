@@ -420,10 +420,10 @@ export default function InventoryPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">Inventory</h1>
-          <p className="text-muted">{items.length} items total</p>
+          <h1 className="text-2xl sm:text-3xl mb-1 sm:mb-4">Inventory</h1>
+          <p className="text-muted text-xs sm:text-sm">{items.length} items total</p>
         </div>
-        <div className="flex gap-10">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -433,45 +433,47 @@ export default function InventoryPage() {
             title="Import Excel"
           />
           <button 
-            className="btn-ghost" 
+            className="btn-ghost text-xs sm:text-sm px-3 py-2 flex-1 sm:flex-none justify-center" 
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
           >
             <FileUp size={16} /> {importing ? 'Importing...' : 'Import Excel'}
           </button>
           <button 
-            className="btn-ghost" 
+            className="btn-ghost text-xs sm:text-sm px-3 py-2 flex-1 sm:flex-none justify-center" 
             onClick={handleExportExcel}
             title="Download Excel"
           >
             <FileSpreadsheet size={16} /> Excel
           </button>
           <button 
-            className="btn-ghost" 
+            className="btn-ghost text-xs sm:text-sm px-3 py-2 flex-1 sm:flex-none justify-center" 
             onClick={handleExportPDF}
             title="Download PDF"
           >
             <FileDown size={16} /> PDF
           </button>
-          <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Add Item</button>
+          <button className="btn-gold text-xs sm:text-sm px-3 py-2 flex-1 sm:flex-none justify-center" onClick={openAdd}><Plus size={16} /> Add Item</button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="search-container">
-        <div className="search-wrapper">
+      <div className="search-container flex flex-col sm:flex-row gap-2.5 mb-4">
+        <div className="search-wrapper w-full sm:flex-1">
           <Search size={14} className="search-icon" />
           <input className="input search-input" placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {['All', 'Available', 'Sold', 'Buyback'].map(s => (
-          <button 
-            key={s} 
-            onClick={() => setFilter(s)} 
-            className={`filter-btn ${filter === s ? 'filter-btn-active' : ''}`}
-          >
-            {s}
-          </button>
-        ))}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none whitespace-nowrap">
+          {['All', 'Available', 'Sold', 'Buyback'].map(s => (
+            <button 
+              key={s} 
+              onClick={() => setFilter(s)} 
+              className={`filter-btn ${filter === s ? 'filter-btn-active' : ''}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card p-0">

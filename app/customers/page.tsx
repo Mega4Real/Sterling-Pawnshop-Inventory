@@ -123,13 +123,13 @@ export default function CustomersPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">Customers</h1>
-          <p className="text-muted">{customers.length} registered customers</p>
+          <h1 className="text-2xl sm:text-3xl mb-1 sm:mb-4">Customers</h1>
+          <p className="text-muted text-xs sm:text-sm">{customers.length} registered customers</p>
         </div>
-        <button className="btn-gold" onClick={openAdd}><Plus size={16} /> Add Customer</button>
+        <button className="btn-gold text-xs sm:text-sm w-full sm:w-auto justify-center" onClick={openAdd}><Plus size={16} /> Add Customer</button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-16">
+      <div className="flex flex-col md:flex-row gap-4 sm:gap-6">
         {/* List */}
         <div className="flex-1">
           <div className="search-wrapper mb-16">

@@ -261,12 +261,12 @@ export default function SMSPortal() {
       {/* Page header */}
       <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">SMS Portal</h1>
-          <p className="text-muted">Send reminders, alerts, and custom messages to pawnshop clients.</p>
+          <h1 className="text-2xl sm:text-3xl mb-1 sm:mb-4">SMS Portal</h1>
+          <p className="text-muted text-xs sm:text-sm">Send reminders, alerts, and custom messages to pawnshop clients.</p>
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-24">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
 
         {/* ── Left: Compose form ──────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col gap-24">

@@ -281,29 +281,31 @@ export default function BuybacksPage() {
   }
 
   return (
-    <div className="mb-24">
+    <div className="mb-12 sm:mb-24">
       <div className="page-header">
         <div>
-          <h1 className="text-3xl mb-4">Buybacks</h1>
-          <p className="text-muted">{buybacks.filter(l => l.status === 'Active').length} active buybacks</p>
+          <h1 className="text-2xl sm:text-3xl mb-1 sm:mb-4">Buybacks</h1>
+          <p className="text-muted text-xs sm:text-sm">{buybacks.filter(l => l.status === 'Active').length} active buybacks</p>
         </div>
-        <button className="btn-gold" onClick={openAdd}><Plus size={16} /> New Buyback</button>
+        <button className="btn-gold text-xs sm:text-sm w-full sm:w-auto justify-center" onClick={openAdd}><Plus size={16} /> New Buyback</button>
       </div>
 
-      <div className="search-container">
-        <div className="search-wrapper">
+      <div className="search-container flex flex-col sm:flex-row gap-2.5 mb-4">
+        <div className="search-wrapper w-full sm:flex-1">
           <Search size={14} className="search-icon" />
           <input className="input search-input" placeholder="Search customer or item…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {['Active', 'All', 'Redeemed', 'Forfeited', 'Extended'].map(s => (
-          <button 
-            key={s} 
-            onClick={() => setFilter(s)} 
-            className={`filter-btn ${filter === s ? 'filter-btn-active' : ''}`}
-          >
-            {s}
-          </button>
-        ))}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none whitespace-nowrap">
+          {['Active', 'All', 'Redeemed', 'Forfeited', 'Extended'].map(s => (
+            <button 
+              key={s} 
+              onClick={() => setFilter(s)} 
+              className={`filter-btn ${filter === s ? 'filter-btn-active' : ''}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card p-0">

@@ -899,3 +899,52 @@ tr:hover td { background: var(--bg-elevated); }
 .sidebar-mobile-drawer--open {
   transform: translateX(0);
 }
+
+/* ── Print Styles for Payslips & Reports ── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt;
+  }
+
+  .sidebar,
+  .sidebar-desktop-wrapper,
+  .sidebar-mobile-toggle,
+  .sidebar-mobile-overlay,
+  .no-print,
+  button,
+  .modal-backdrop,
+  header {
+    display: none !important;
+  }
+
+  .app-container {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .printable-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+
+  .printable-payslip {
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    page-break-inside: avoid;
+  }
+}
+
